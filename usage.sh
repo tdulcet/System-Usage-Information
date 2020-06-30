@@ -73,7 +73,7 @@ DNS="1.1.1.1" # Cloudflare
 # DNS="2001:4860:4860::8888" # Google Public DNS
 
 # Public IP address service URL
-# To find the service with the best HTTPS response times on your network, run this script: wget https://raw.github.com/tdulcet/System-Usage-Information/master/ipinfo.sh -qO - | bash -s
+# To find the service with the best HTTPS response times on your network, run this script: wget https://raw.github.com/tdulcet/Linux-System-Information/master/ipinfo.sh -qO - | bash -s
 PUBLIC_IP_URL="https://icanhazip.com/"
 
 # Do not change anything below this
@@ -149,7 +149,7 @@ while getopts "hpsuvwW" c; do
 done
 shift $((OPTIND - 1))
 
-if [[ "$#" -ne 0 ]]; then
+if [[ $# -ne 0 ]]; then
 	usage "$0"
 	exit 1
 fi
@@ -516,20 +516,22 @@ while true; do
 		done
 	fi
 	MEMINFO=$(</proc/meminfo)
-	PROCESSES=0
-	ZOMBIES=0
-	THREADS=0
-	for process in /proc/[0-9]*; do
-		((++PROCESSES))
-		if [[ $(awk '/^State:/ {print $2}' "$process/status" 2>/dev/null) == "Z" ]]; then
-			((++ZOMBIES))
-		fi
-		# for thread in "$process"/task/[0-9]*; do
-			# ((++THREADS))
-		# done
-		threads=( "$process"/task/[0-9]* )
-		((THREADS+=${#threads[*]}))
-	done
+	THREADS=$(ps --no-headers -eTo pid,spid,s)
+	PROCESSES=$(echo "$THREADS" | sort -nu)
+	THREADS=$(echo "$THREADS" | wc -l)
+	ZOMBIES=$(echo "$PROCESSES" | awk '$3=="Z"' | wc -l)
+	PROCESSES=$(echo "$PROCESSES" | wc -l)
+	# for process in /proc/[0-9]*; do
+		# ((++PROCESSES))
+		# if [[ $(awk '/^State:/ {print $2}' "$process/status" 2>/dev/null) == "Z" ]]; then
+			# ((++ZOMBIES))
+		# fi
+		# # for thread in "$process"/task/[0-9]*; do
+			# # ((++THREADS))
+		# # done
+		# threads=( "$process"/task/[0-9]* )
+		# ((THREADS+=${#threads[*]}))
+	# done
 	for file in /sys/class/power_supply/[B,b]*; do
 		if [[ -d "$file" ]]; then
 			if [[ -r "$file/energy_now" && -r "$file/energy_full" ]]; then
@@ -783,7 +785,7 @@ while true; do
 			if [[ -n "$PUBLIC_IPV4_HOSTNAME" ]]; then
 				echo -e "${BOLD}Public Hostname${NC}:\t\t$PUBLIC_IPV4_HOSTNAME"
 			fi
-			echo -e "${BOLD}Public IPv4 address${NC}:\t\t$PUBLIC_IPV4_ADDRESS"
+			printf "${BOLD}Public IPv4 address${NC}:\t\t%s\n" "$PUBLIC_IPV4_ADDRESS"
 		# else
 			# echo "Error getting the public IPv4 address: $(echo "$PUBLIC_IPV4_ADDRESS" | head -n 1 | sed -n 's/^[^:]\+: ([^)]\+) //p')" >&2
 		fi
@@ -804,7 +806,7 @@ while true; do
 			if [[ -n "$PUBLIC_IPV6_HOSTNAME" ]]; then
 				echo -e "${BOLD}Public Hostname${NC}:\t\t$PUBLIC_IPV6_HOSTNAME"
 			fi
-			echo -e "${BOLD}Public IPv6 address${NC}:\t\t$PUBLIC_IPV6_ADDRESS"
+			printf "${BOLD}Public IPv6 address${NC}:\t\t%s\n" "$PUBLIC_IPV6_ADDRESS"
 		# else
 			# echo "Error getting the public IPv6 address: $(echo "$PUBLIC_IPV6_ADDRESS" | head -n 1 | sed -n 's/^[^:]\+: ([^)]\+) //p')" >&2
 		fi
@@ -819,7 +821,7 @@ while true; do
 
 		if [[ -n "$WEATHER" ]]; then
 			if WEATHER=$(curl -sS https://wttr.in/?format=2 2>&1); then
-				echo -e "${BOLD}Weather${NC}:\t\t\t$WEATHER"
+				printf "${BOLD}Weather${NC}:\t\t\t%s\n" "$WEATHER"
 			else
 				echo "Error getting the weather: $(echo "$WEATHER" | head -n 1 | sed -n 's/^[^:]\+: ([^)]\+) //p')" >&2
 			fi
@@ -828,7 +830,7 @@ while true; do
 		echo
 
 		if [[ -z "$SHORT" ]]; then
-			echo "For system information, run: wget https://web.cecs.pdx.edu/tdulcet/info.sh -qO - | bash -s"
+			echo "For system information, run: wget https://raw.github.com/tdulcet/Linux-System-Information/master/info.sh -qO - | bash -s"
 		fi
 		
 		break

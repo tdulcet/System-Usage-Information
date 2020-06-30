@@ -58,18 +58,18 @@ See [Help](#help) below for full usage information.
 ### wget
 
 ```bash
-wget https://raw.github.com/tdulcet/Linux-System-Information/master/usage.sh -qO - | bash -s --
+wget https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh -qO - | bash -s --
 ```
 
 ### curl
 
 ```bash
-curl https://raw.github.com/tdulcet/Linux-System-Information/master/usage.sh | bash -s --
+curl https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh | bash -s --
 ```
 
 ### Message of the day (motd)
 
-1. Download the script ([usage.sh](usage.sh)). Run: `wget https://raw.github.com/tdulcet/Linux-System-Information/master/usage.sh`.
+1. Download the script ([usage.sh](usage.sh)). Run: `wget https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh`.
 2. There are some variables at the top of the script users can set to change the output, including the thresholds for the colors.
 3. Install the script. Run: `sudo mv usage.sh /usr/local/bin/usage` and `sudo chmod +x /usr/local/bin/usage`.
 4. Create a new script in the `/etc/update-motd.d/` directory that runs Linux System Usage Information script, for example called `50-sys-usage-info`:
