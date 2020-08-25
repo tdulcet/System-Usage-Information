@@ -154,6 +154,8 @@ if [[ $# -ne 0 ]]; then
 	exit 1
 fi
 
+decimal_point=$(locale decimal_point)
+
 # Adapted from: https://github.com/tdulcet/Remote-Servers-Status/blob/master/status.sh
 # getSecondsAsDigitalClock <seconds>
 getSecondsAsDigitalClock() {
@@ -195,7 +197,7 @@ cpuusage() {
 	diff_idle=$(( cpu[3] - previous_cpu[3] ))
 	diff_total=$(( total - previous_total ))
 
-	echo "$diff_idle $diff_total" | awk '{ printf "%g", ($2 - $1) / $2 * 100 }'
+	echo "$diff_idle $diff_total" | awk '{ printf "%.15g", ($2 - $1) / $2 * 100 }'
 }
 
 # Usage bar
@@ -204,7 +206,7 @@ cpuusage() {
 bar() {
 	if [[ -z "$UNICODE" ]]; then
 		local label usage prog total output
-		label="$(printf "%.1f" "$1")%${3:+ $3}"
+		label="$(printf "%.1f" "${1/./$decimal_point}")%${3:+ $3}"
 		# ((usage=$1 * bar_length / 100))
 		usage=$(echo "$1 $bar_length" | awk '{ printf "%d", $1 * $2 / 100 }')
 
@@ -218,10 +220,10 @@ bar() {
 		fi
 
 		output="${prog// /|}${total}${label}"
-		echo -e -n "[${2}${output::$usage}${NC}${output:$usage}]"
+		echo -e -n "[${2}${output::$usage}${2:+${NC}}${output:$usage}]"
 	else
 		local label abar_length usage prog total
-		label="$(printf "%.1f" "$1")%"
+		label="$(printf "%.1f" "${1/./$decimal_point}")%"
 		((abar_length=bar_length*8))
 		usage=$(echo "$1 $abar_length" | awk '{ printf "%d", $1 * $2 / 100 }')
 
@@ -230,7 +232,7 @@ bar() {
 		printf -v total "%$(( (abar_length - usage) / 8 ))s"
 
 		blocks=( "" "▏" "▎" "▍" "▌" "▋" "▊" "▉" )
-		echo -e -n "${label} [${2}${prog// /█}${blocks[usage % 8]}${NC}${total}]${3:+ $3}"
+		echo -e -n "${label} [${2}${prog// /█}${blocks[usage % 8]}${2:+${NC}}${total}]${3:+ $3}"
 	fi
 }
 
@@ -253,21 +255,21 @@ outputunit() {
 	local power=0
 	while (( $(echo "$number $scale_base" | awk 'function abs(x) { return x<0 ? -x : x } { print (abs($1)>=$2) }') )); do
 		((++power))
-		number=$(echo "$number $scale_base" | awk '{ printf "%g", $1 / $2 }')
+		number=$(echo "$number $scale_base" | awk '{ printf "%.15g", $1 / $2 }')
 	done
 
-	anumber=$(echo "$number" | awk 'function abs(x) { return x<0 ? -x : x } { printf "%g", abs($1) + 0.5 }')
+	anumber=$(echo "$number" | awk 'function abs(x) { return x<0 ? -x : x } { num=abs($1); printf "%.15g", num + (num<10 ? 0.0005 : (num<100 ? 0.005 : (num<1000 ? 0.05 : 0.5))) }')
 
 	if (( $(echo "$number $anumber" | awk '{ print $1!=0 && $2<1000 }') )) && [[ $power -gt 0 ]]; then
-		str=$(printf '%g' "$number")
+		str=$(printf '%g' "${number/./$decimal_point}")
 
 		((length=5 + ($(echo "$number" | awk '{ print $1<0 }') ? 1 : 0)))
 		if [[ ${#str} -gt $length ]]; then
 			prec=$(echo "$anumber" | awk '{ print $1<10 ? 3 : ($1<100 ? 2 : ($1<1000 ? 1 : 0)) }')
-			str=$(printf "%'.*f" "$prec" "$number")
+			str=$(printf "%'.*f" "$prec" "${number/./$decimal_point}")
 		fi
 	else
-		str=$(printf "%'.0f" "$number")
+		str=$(printf "%'.0f" "${number/./$decimal_point}")
 	fi
 	
 	if [[ $power -lt 9 ]]; then
@@ -289,7 +291,7 @@ outputusage() {
 	local usage
 	local used=$(( $1 * 1024 ))
 	local total=$(( $2 * 1024 ))
-	usage=$([[ $2 -gt 0 ]] && echo "$1 $2" | awk '{ printf "%g", $1 / $2 * 100 }' || echo "0")
+	usage=$([[ $2 -gt 0 ]] && echo "$1 $2" | awk '{ printf "%.15g", $1 / $2 * 100 }' || echo "0")
 	if (( $(echo "$usage $3" | awk '{ print ($1>=$2) }') )); then
 		bar "$usage" "${RED}"
 	elif (( $(echo "$usage $4" | awk '{ print ($1>=$2) }') )); then
@@ -356,30 +358,37 @@ outputpressure() {
 # Celsius to Fahrenheit
 # ctof <temperature>
 ctof() {
-	echo "$1" | awk '{ printf "%g", ($1 * (9 / 5)) + 32 }'
+	echo "$1" | awk '{ printf "%.15g", ($1 * (9 / 5)) + 32 }'
 }
 
-# outputcputemp <temperature>
+# outputcputemp <temperature> [critical temperature] [warning temperature]
 outputcputemp() {
-	local temp
-	temp=$(echo "$1" | awk '{ printf "%g", $1 / 1000 }')
+	local temp c f
+	temp=$(echo "$1" | awk '{ printf "%.15g", $1 / 1000 }')
+	c=$(printf "%.1f" "${temp/./$decimal_point}")
+	f=$(ctof "$temp")
+	f=$(printf "%.1f" "${f/./$decimal_point}")
 	if [[ $1 -ge ${2:-$((CPU_TEMP_CRITICAL * 1000))} ]]; then
-		echo -e "${RED}$(printf "%.1f" "$temp")${NC}°C (${RED}$(printf "%.1f" "$(ctof "$temp")")${NC}°F)"
+		echo -e "${RED}$c${NC}°C (${RED}$f${NC}°F)"
 	elif [[ $1 -ge ${3:-$((CPU_TEMP_WARNING * 1000))} ]]; then
-		echo -e "${YELLOW}$(printf "%.1f" "$temp")${NC}°C (${YELLOW}$(printf "%.1f" "$(ctof "$temp")")${NC}°F)"
+		echo -e "${YELLOW}$c${NC}°C (${YELLOW}$f${NC}°F)"
 	else
-		echo -e "${GREEN}$(printf "%.1f" "$temp")${NC}°C (${GREEN}$(printf "%.1f" "$(ctof "$temp")")${NC}°F)"
+		echo -e "${GREEN}$c${NC}°C (${GREEN}$f${NC}°F)"
 	fi
 }
 
 # outputgputemp <temperature>
 outputgputemp() {
+	local c f
+	c=$(printf "%.1f" "${1/./$decimal_point}")
+	f=$(ctof "$1")
+	f=$(printf "%.1f" "${f/./$decimal_point}")
 	if (( $(echo "$1 $GPU_TEMP_CRITICAL" | awk '{ print ($1>=$2) }') )); then
-		echo -e "${RED}$(printf "%.1f" "$1")${NC}°C (${RED}$(printf "%.1f" "$(ctof "$1")")${NC}°F)"
+		echo -e "${RED}$c${NC}°C (${RED}$f${NC}°F)"
 	elif (( $(echo "$1 $GPU_TEMP_WARNING" | awk '{ print ($1>=$2) }') )); then
-		echo -e "${YELLOW}$(printf "%.1f" "$1")${NC}°C (${YELLOW}$(printf "%.1f" "$(ctof "$1")")${NC}°F)"
+		echo -e "${YELLOW}$c${NC}°C (${YELLOW}$f${NC}°F)"
 	else
-		echo -e "${GREEN}$(printf "%.1f" "$1")${NC}°C (${GREEN}$(printf "%.1f" "$(ctof "$1")")${NC}°F)"
+		echo -e "${GREEN}$c${NC}°C (${GREEN}$f${NC}°F)"
 	fi
 }
 
@@ -454,11 +463,11 @@ while true; do
 		for file in /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq; do
 			if [[ -r "$file" ]]; then
 				CPU_FREQ=()
-				# CPU_FREQ=( $(awk '{ printf "%g\n", $1 / 1000 }' /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq) )
+				# CPU_FREQ=( $(awk '{ printf "%.15g\n", $1 / 1000 }' /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq) )
 				for (( i=0; ; ++i )); do
 					file="/sys/devices/system/cpu/cpu$i/cpufreq/scaling_cur_freq"
 					if [[ -r "$file" ]]; then
-						CPU_FREQ+=( "$(awk '{ printf "%g", $1 / 1000 }' "$file")" )
+						CPU_FREQ+=( "$(awk '{ printf "%.15g", $1 / 1000 }' "$file")" )
 					else
 						break
 					fi
@@ -535,9 +544,9 @@ while true; do
 	for file in /sys/class/power_supply/[B,b]*; do
 		if [[ -d "$file" ]]; then
 			if [[ -r "$file/energy_now" && -r "$file/energy_full" ]]; then
-				BATTERY_CAPACITY=$(echo "$(<"$file/energy_now") $(<"$file/energy_full")" | awk '{ printf "%g", $1 / $2 * 100 }')
+				BATTERY_CAPACITY=$(echo "$(<"$file/energy_now") $(<"$file/energy_full")" | awk '{ printf "%.15g", $1 / $2 * 100 }')
 			elif [[ -r "$file/charge_now" && -r "$file/charge_full" ]]; then
-				BATTERY_CAPACITY=$(echo "$(<"$file/charge_now") $(<"$file/charge_full")" | awk '{ printf "%g", $1 / $2 * 100 }')
+				BATTERY_CAPACITY=$(echo "$(<"$file/charge_now") $(<"$file/charge_full")" | awk '{ printf "%.15g", $1 / $2 * 100 }')
 			elif [[ -r "$file/capacity" ]]; then
 				BATTERY_CAPACITY=$(<"$file/capacity")
 			fi
@@ -557,7 +566,8 @@ while true; do
 	echo "System usage information as of $(date)"
 
 	CPU_USAGE=$(cpuusage)
-	echo -e "\n${BOLD}Processor (CPU) usage${NC}:\t\t$(outputcpuusage "$CPU_USAGE" "${CPU_FREQ:+$(printf "%'.0f" "$(printf '%s\n' "${CPU_FREQ[@]}" | sort -nr | head -n 1)") MHz}")"
+	cpu_freq=${CPU_FREQ:+$(printf '%s\n' "${CPU_FREQ[@]}" | sort -nr | head -n 1)}
+	echo -e "\n${BOLD}Processor (CPU) usage${NC}:\t\t$(outputcpuusage "$CPU_USAGE" "${cpu_freq:+$(printf "%'.0f" "${cpu_freq/./$decimal_point}") MHz}")"
 
 	echo -e "\t${BOLD}CPU Cores/Threads${NC}:\t$CPU_CORES/$CPU_THREADS"
 
@@ -573,7 +583,7 @@ while true; do
 		if [[ $CPU_THREADS -gt 1 ]]; then
 			echo -e "\t${BOLD}CPU Thread usage${NC}:"
 			for i in "${!CPUS_USAGE[@]}"; do
-				echo -e "${BOLD}$(printf "%'3d" $(( i + 1 )))${NC}: $(outputcpuusage "${CPUS_USAGE[i]}" "${CPU_FREQ:+$(printf "%'0.f" "${CPU_FREQ[i]}") MHz}")"
+				echo -e "${BOLD}$(printf "%'3d" $(( i + 1 )))${NC}: $(outputcpuusage "${CPUS_USAGE[i]}" "${CPU_FREQ:+$(printf "%'.0f" "${CPU_FREQ[i]/./$decimal_point}") MHz}")"
 			done | column
 		fi
 	fi
@@ -640,7 +650,7 @@ while true; do
 	if [[ -n "$DISK_NAMES" ]]; then
 		echo -e -n "${BOLD}Disk IO usage${NC} (read/write):\t"
 		for i in "${!DISK_NAMES[@]}"; do
-			usage=$(echo "${DISK_TIMES[i]}" | awk '{ printf "%g", $1 / 10 }')
+			usage=$(echo "${DISK_TIMES[i]}" | awk '{ printf "%.15g", $1 / 10 }')
 			echo -e -n "$([[ $i -gt 0 ]] && echo "\t\t\t\t")${BOLD}${DISK_NAMES[i]}${NC}: "
 			if (( $(echo "$usage $DISK_CRITICAL" | awk '{ print ($1>=$2) }') )); then
 				bar "$usage" "${RED}"
@@ -664,7 +674,7 @@ while true; do
 		for i in "${!NET_INERFACES[@]}"; do
 			echo -e -n "$([[ $i -gt 0 ]] && echo "\t\t\t\t")${BOLD}${NET_INERFACES[i]}${NC}: "
 			if [[ -n "${NET_SPEED[i]}" && ${NET_SPEED[i]} -gt 0 ]]; then
-				usage=$(echo "$(( NETR_USAGE[i] + NETT_USAGE[i] )) $(( NET_SPEED[i] * 125000 ))" | awk '{ printf "%g", $1 / $2 * 100 }')
+				usage=$(echo "$(( NETR_USAGE[i] + NETT_USAGE[i] )) $(( NET_SPEED[i] * 125000 ))" | awk '{ printf "%.15g", $1 / $2 * 100 }')
 				if (( $(echo "$usage $NET_CRITICAL" | awk '{ print ($1>=$2) }') )); then
 					bar "$usage" "${RED}"
 				elif (( $(echo "$usage $NET_WARNING" | awk '{ print ($1>=$2) }') )); then
@@ -707,7 +717,7 @@ while true; do
 			for i in "${!TOTAL_GPU_MEM[@]}"; do
 				total=$(echo "${TOTAL_GPU_MEM[i]}" | awk '{print $1}')
 				used=$(echo "${USED_GPU_MEM[i]}" | awk '{print $1}')
-				usage=$([[ $total -gt 0 ]] && echo "$used $total" | awk '{ printf "%g", $1 / $2 * 100 }' || echo "0")
+				usage=$([[ $total -gt 0 ]] && echo "$used $total" | awk '{ printf "%.15g", $1 / $2 * 100 }' || echo "0")
 				echo -n "$([[ $i -gt 0 ]] && echo ", ")"
 				if (( $(echo "$usage $GPU_RAM_CRITICAL" | awk '{ print ($1>=$2) }') )); then
 					bar "$usage" "${RED}"

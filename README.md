@@ -112,6 +112,7 @@ Pull requests welcome! Ideas for contributions:
 
 * Add more system usage information
 	* Show Wi-Fi signal quality without using the deprecated [Wireless tools](https://en.wikipedia.org/wiki/Wireless_tools_for_Linux) or `/proc/net/wireless` file.
+	* Show total Disk IO and Network usage.
 * Add more examples
 * Improve the performance
 * Support more GPUs
