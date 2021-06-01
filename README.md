@@ -43,7 +43,7 @@ Useful for displaying a [message of the day](https://en.wikipedia.org/wiki/Motd_
 
 To monitor the status of one or more servers, please see the [Remote Servers Status Monitoring](https://github.com/tdulcet/Remote-Servers-Status) script.
 
-Please visit [tealdulcet.com](https://www.tealdulcet.com/) to support this script and my other software development.
+❤️ Please visit [tealdulcet.com](https://www.tealdulcet.com/) to support this script and my other software development.
 
 ![](images/Ubuntu%20Desktop.png)
 

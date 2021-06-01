@@ -78,11 +78,15 @@ PUBLIC_IP_URL="https://icanhazip.com/"
 
 # Do not change anything below this
 
-RED='\e[0;31m'
-YELLOW='\e[0;33m'
-GREEN='\e[0;32m'
+RED='\e[31m'
+GREEN='\e[32m'
+YELLOW='\e[33m'
+# BLUE='\e[34m'
+MAGENTA='\e[35m'
+CYAN='\e[36m'
 BOLD='\e[1m'
 DIM='\e[2m'
+DEFAULT='\e[39m' # Default Color
 NC='\e[m' # No Color
 
 suffix_power_char=("" "K" "M" "G" "T" "P" "E" "Z" "Y")
@@ -223,7 +227,7 @@ bar() {
 		echo -e -n "[${2}${output::$usage}${2:+${NC}}${output:$usage}]"
 	else
 		local label abar_length usage prog total
-		label="$(printf "%.1f" "${1/./$decimal_point}")%"
+		label="$(printf "%5.1f" "${1/./$decimal_point}")%"
 		((abar_length=bar_length*8))
 		usage=$(echo "$1 $abar_length" | awk '{ printf "%d", $1 * $2 / 100 }')
 
@@ -299,25 +303,25 @@ outputusage() {
 	else
 		bar "$usage" "${GREEN}"
 	fi
-	echo "  $(outputunit "$used" 0)B/$(outputunit "$total" 0)B$([[ $2 -gt 0 ]] && echo " ($(outputunit "$used" 1)B/$(outputunit "$total" 1)B)")"
+	echo -e "  ${CYAN}$(outputunit "$used" 0)B${DEFAULT}/${MAGENTA}$(outputunit "$total" 0)B${DEFAULT}$([[ $2 -gt 0 ]] && echo " ${DIM}(${CYAN}$(outputunit "$used" 1)B${DEFAULT}/${MAGENTA}$(outputunit "$total" 1)B${DEFAULT})${NC}")"
 }
 
-# BtoKiB <B>
+# BtoKiB <Bytes>
 BtoKiB() {
 	echo "$(printf "%'d" $(( $1 / 1024 )))KiB/s"
 }
 
-# BtoKB <B>
+# BtoKB <Bytes>
 BtoKB() {
 	echo "$(printf "%'d" $(( $1 / 1000 )))KB/s"
 }
 
-# BtoKib <B>
+# BtoKib <Bytes>
 BtoKib() {
 	echo "$(printf "%'d" $(( $1 / 128 )))Kib/s"
 }
 
-# BtoKb <B>
+# BtoKb <Bytes>
 BtoKb() {
 	echo "$(printf "%'d" $(( $1 / 125 )))Kbps"
 }
@@ -336,22 +340,22 @@ outputcpuusage() {
 # outputloadavg <load average>
 outputloadavg() {
 	if (( $(echo "$1 $LOAD_CRITICAL $CPU_THREADS" | awk '{ print ($1>$2 * $3) }') )); then
-		echo -e "${RED}$1${NC}"
+		echo -e "${RED}$1${DEFAULT}"
 	elif (( $(echo "$1 $LOAD_WARNING $CPU_THREADS" | awk '{ print ($1>$2 * $3) }') )); then
-		echo -e "${YELLOW}$1${NC}"
+		echo -e "${YELLOW}$1${DEFAULT}"
 	else
-		echo -e "${GREEN}$1${NC}"
+		echo -e "${GREEN}$1${DEFAULT}"
 	fi
 }
 
 # outputpressure <PSI average>
 outputpressure() {
 	if (( $(echo "$1 $PRESSURE_CRITICAL" | awk '{ print ($1>$2) }') )); then
-		echo -e "${RED}$1${NC}%"
+		echo -e "${RED}$1${DEFAULT}%"
 	elif (( $(echo "$1 $PRESSURE_WARNING" | awk '{ print ($1>$2) }') )); then
-		echo -e "${YELLOW}$1${NC}%"
+		echo -e "${YELLOW}$1${DEFAULT}%"
 	else
-		echo -e "${GREEN}$1${NC}%"
+		echo -e "${GREEN}$1${DEFAULT}%"
 	fi
 }
 
@@ -369,11 +373,11 @@ outputcputemp() {
 	f=$(ctof "$temp")
 	f=$(printf "%.1f" "${f/./$decimal_point}")
 	if [[ $1 -ge ${2:-$((CPU_TEMP_CRITICAL * 1000))} ]]; then
-		echo -e "${RED}$c${NC}°C (${RED}$f${NC}°F)"
+		echo -e "${RED}$c${DEFAULT}°C ${DIM}(${RED}$f${DEFAULT}°F)${NC}"
 	elif [[ $1 -ge ${3:-$((CPU_TEMP_WARNING * 1000))} ]]; then
-		echo -e "${YELLOW}$c${NC}°C (${YELLOW}$f${NC}°F)"
+		echo -e "${YELLOW}$c${DEFAULT}°C ${DIM}(${YELLOW}$f${DEFAULT}°F)${NC}"
 	else
-		echo -e "${GREEN}$c${NC}°C (${GREEN}$f${NC}°F)"
+		echo -e "${GREEN}$c${DEFAULT}°C ${DIM}(${GREEN}$f${DEFAULT}°F)${NC}"
 	fi
 }
 
@@ -384,11 +388,11 @@ outputgputemp() {
 	f=$(ctof "$1")
 	f=$(printf "%.1f" "${f/./$decimal_point}")
 	if (( $(echo "$1 $GPU_TEMP_CRITICAL" | awk '{ print ($1>=$2) }') )); then
-		echo -e "${RED}$c${NC}°C (${RED}$f${NC}°F)"
+		echo -e "${RED}$c${DEFAULT}°C ${DIM}(${RED}$f${DEFAULT}°F)${NC}"
 	elif (( $(echo "$1 $GPU_TEMP_WARNING" | awk '{ print ($1>=$2) }') )); then
-		echo -e "${YELLOW}$c${NC}°C (${YELLOW}$f${NC}°F)"
+		echo -e "${YELLOW}$c${DEFAULT}°C ${DIM}(${YELLOW}$f${DEFAULT}°F)${NC}"
 	else
-		echo -e "${GREEN}$c${NC}°C (${GREEN}$f${NC}°F)"
+		echo -e "${GREEN}$c${DEFAULT}°C ${DIM}(${GREEN}$f${DEFAULT}°F)${NC}"
 	fi
 }
 
@@ -458,7 +462,7 @@ while true; do
 		MEM_PRESSURE=( $(awk -F'[ =]' '/^some/ {print $3,$5,$7}' "$file/memory") )
 		IO_PRESSURE=( $(awk -F'[ =]' '/^some/ {print $3,$5,$7}' "$file/io") )
 	fi
-	CPU_FREQ=( $(sed -n 's/^cpu MHz[[:space:]]*: *//p' /proc/cpuinfo) )
+	CPU_FREQ=( $(sed -n 's/^cpu MHz[[:blank:]]*: *//p' /proc/cpuinfo) )
 	if [[ -z "$CPU_FREQ" ]] || [[ $CPU_THREADS -gt 1 && $(printf '%s\n' "${CPU_FREQ[@]}" | sort -nu | wc -l) -eq 1 ]]; then
 		for file in /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq; do
 			if [[ -r "$file" ]]; then
@@ -563,7 +567,8 @@ while true; do
 		echo -e -n "\e[1;1H" # "\e[2J"
 	fi
 
-	echo "System usage information as of $(date)"
+	printf '\e]8;;https://github.com/tdulcet/System-Usage-Information/\e\\System usage information\e]8;;\e\\ as of '
+	date
 
 	CPU_USAGE=$(cpuusage)
 	cpu_freq=${CPU_FREQ:+$(printf '%s\n' "${CPU_FREQ[@]}" | sort -nr | head -n 1)}
@@ -588,13 +593,13 @@ while true; do
 		fi
 	fi
 
-	echo -e "${BOLD}Load average${NC} (1, 5, 15 minutes):$(outputloadavg "${LOADAVG[0]}"), $(outputloadavg "${LOADAVG[1]}"), $(outputloadavg "${LOADAVG[2]}")"
+	echo -e "${BOLD}Load average${NC} (${BOLD}1${NC}, 5, ${DIM}15${NC} minutes):${BOLD}$(outputloadavg "${LOADAVG[0]}")${NC}, $(outputloadavg "${LOADAVG[1]}"), ${DIM}$(outputloadavg "${LOADAVG[2]}")${NC}"
 
 	if [[ -z "$SHORT" && -n "$CPU_PRESSURE" && -n "$MEM_PRESSURE" && -n "$IO_PRESSURE" ]]; then
-		echo -e "${BOLD}Pressure Stall (PSI) average${NC} (10 seconds, 1, 5 minutes)"
-		echo -e "\t${BOLD}PSI Some CPU${NC}:\t\t$(outputpressure "${CPU_PRESSURE[0]}"), $(outputpressure "${CPU_PRESSURE[1]}"), $(outputpressure "${CPU_PRESSURE[2]}")"
-		echo -e "\t${BOLD}PSI Some RAM${NC}:\t\t$(outputpressure "${MEM_PRESSURE[0]}"), $(outputpressure "${MEM_PRESSURE[1]}"), $(outputpressure "${MEM_PRESSURE[2]}")"
-		echo -e "\t${BOLD}PSI Some IO${NC}:\t\t$(outputpressure "${IO_PRESSURE[0]}"), $(outputpressure "${IO_PRESSURE[1]}"), $(outputpressure "${IO_PRESSURE[2]}")"
+		echo -e "${BOLD}Pressure Stall (PSI) average${NC} (${BOLD}10 seconds${NC}, 1, ${DIM}5${NC} minutes)"
+		echo -e "\t${BOLD}PSI Some CPU${NC}:\t\t${BOLD}$(outputpressure "${CPU_PRESSURE[0]}")${NC}, $(outputpressure "${CPU_PRESSURE[1]}"), ${DIM}$(outputpressure "${CPU_PRESSURE[2]}")${NC}"
+		echo -e "\t${BOLD}PSI Some RAM${NC}:\t\t${BOLD}$(outputpressure "${MEM_PRESSURE[0]}")${NC}, $(outputpressure "${MEM_PRESSURE[1]}"), ${DIM}$(outputpressure "${MEM_PRESSURE[2]}")${NC}"
+		echo -e "\t${BOLD}PSI Some IO${NC}:\t\t${BOLD}$(outputpressure "${IO_PRESSURE[0]}")${NC}, $(outputpressure "${IO_PRESSURE[1]}"), ${DIM}$(outputpressure "${IO_PRESSURE[2]}")${NC}"
 	fi
 
 	if [[ -n "$TEMP" ]]; then
@@ -659,7 +664,7 @@ while true; do
 			else
 				bar "$usage" "${GREEN}"
 			fi
-			echo -e "  ${DIM}R${NC}: $(BtoKiB "${DISK_READS[i]}") ($(BtoKB "${DISK_READS[i]}")) ${DIM}W${NC}: $(BtoKiB "${DISK_WRITES[i]}") ($(BtoKB "${DISK_WRITES[i]}"))"
+			echo -e "  ${DIM}R${NC}: ${CYAN}$(BtoKiB "${DISK_READS[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKB "${DISK_READS[i]}")${DEFAULT})${NC} ${DIM}W${NC}: ${MAGENTA}$(BtoKiB "${DISK_WRITES[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKB "${DISK_WRITES[i]}")${DEFAULT})${NC}"
 		done
 	fi
 
@@ -682,9 +687,9 @@ while true; do
 				else
 					bar "$usage" "${GREEN}"
 				fi
-				echo -e "  ${DIM}↓R${NC}: $(BtoKib "${NETR_USAGE[i]}") ($(BtoKb "${NETR_USAGE[i]}")) ${DIM}↑T${NC}: $(BtoKib "${NETT_USAGE[i]}") ($(BtoKb "${NETT_USAGE[i]}")) / $(printf "%'d" $(( ((NET_SPEED[i] * 1000000) / 1024) / 1024 )))Mib/s ($(printf "%'d" "${NET_SPEED[i]}")Mbps)"
+				echo -e "  ${DIM}↓R${NC}: ${CYAN}$(BtoKib "${NETR_USAGE[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKb "${NETR_USAGE[i]}")${DEFAULT})${NC} ${DIM}↑T${NC}: ${MAGENTA}$(BtoKib "${NETT_USAGE[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKb "${NETT_USAGE[i]}")${DEFAULT})${NC} / $(printf "%'d" $(( ((NET_SPEED[i] * 1000000) / 1024) / 1024 )))Mib/s ${DIM}($(printf "%'d" "${NET_SPEED[i]}")Mbps)${NC}"
 			else
-				echo -e "${DIM}↓R${NC}: $(BtoKib "${NETR_USAGE[i]}") ($(BtoKb "${NETR_USAGE[i]}")) ${DIM}↑T${NC}: $(BtoKib "${NETT_USAGE[i]}") ($(BtoKb "${NETT_USAGE[i]}"))"
+				echo -e "${DIM}↓R${NC}: ${CYAN}$(BtoKib "${NETR_USAGE[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKb "${NETR_USAGE[i]}")${DEFAULT})${NC} ${DIM}↑T${NC}: ${MAGENTA}$(BtoKib "${NETT_USAGE[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKb "${NETT_USAGE[i]}")${DEFAULT})${NC}"
 			fi
 		done
 	fi
@@ -831,7 +836,9 @@ while true; do
 
 		if [[ -n "$WEATHER" ]]; then
 			if WEATHER=$(curl -sS https://wttr.in/?format=2 2>&1); then
-				printf "${BOLD}Weather${NC}:\t\t\t%s\n" "$WEATHER"
+				printf "${BOLD}"
+				printf '\e]8;;https://wttr.in/\e\\Weather\e]8;;\e\\'
+				printf "${NC}:\t\t\t%s\n" "$WEATHER"
 			else
 				echo "Error getting the weather: $(echo "$WEATHER" | head -n 1 | sed -n 's/^[^:]\+: ([^)]\+) //p')" >&2
 			fi
@@ -840,7 +847,7 @@ while true; do
 		echo
 
 		if [[ -z "$SHORT" ]]; then
-			echo "For system information, run: wget https://raw.github.com/tdulcet/Linux-System-Information/master/info.sh -qO - | bash -s"
+			printf 'For \e]8;;https://github.com/tdulcet/Linux-System-Information/\e\\system information\e]8;;\e\\, run: wget https://raw.github.com/tdulcet/Linux-System-Information/master/info.sh -qO - | bash -s'
 		fi
 		
 		break
