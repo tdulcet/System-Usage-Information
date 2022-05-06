@@ -269,7 +269,7 @@ outputunit() {
 
 		((length=5 + ($(echo "$number" | awk '{ print $1<0 }') ? 1 : 0)))
 		if [[ ${#str} -gt $length ]]; then
-			prec=$(echo "$anumber" | awk '{ print $1<10 ? 3 : ($1<100 ? 2 : ($1<1000 ? 1 : 0)) }')
+			prec=$(echo "$anumber" | awk '{ print $1<10 ? 3 : ($1<100 ? 2 : 1) }')
 			str=$(printf "%'.*f" "$prec" "${number/./$decimal_point}")
 		fi
 	else
@@ -404,7 +404,8 @@ if [[ -n "$WATCH" ]]; then
 fi
 
 CPU_THREADS=$(nproc --all) # $(lscpu | grep -i '^cpu(s)' | sed -n 's/^.\+:[[:blank:]]*//p')
-CPU_CORES=$(( CPU_THREADS / $(lscpu | grep -i '^thread(s) per core' | sed -n 's/^.\+:[[:blank:]]*//p') ))
+CPU_CORES=$(lscpu -ap | grep -v '^#' | awk -F, '{ print $2 }' | sort -nu | wc -l)
+CPU_SOCKETS=$(lscpu | grep -i '^socket(s)' | sed -n 's/^.\+:[[:blank:]]*//p') # $(lscpu -ap | grep -v '^#' | awk -F, '{ print $3 }' | sort -nu | wc -l)
 DISKS=$(lsblk -dbn 2>/dev/null | awk '$6=="disk"')
 NAMES=( $(echo "$DISKS" | awk '{print $1}') )
 INERFACES=( $(ip -o a show up primary scope global | awk '{print $2}' | uniq) )
@@ -574,7 +575,7 @@ while true; do
 	cpu_freq=${CPU_FREQ:+$(printf '%s\n' "${CPU_FREQ[@]}" | sort -nr | head -n 1)}
 	echo -e "\n${BOLD}Processor (CPU) usage${NC}:\t\t$(outputcpuusage "$CPU_USAGE" "${cpu_freq:+$(printf "%'.0f" "${cpu_freq/./$decimal_point}") MHz}")"
 
-	echo -e "\t${BOLD}CPU Cores/Threads${NC}:\t$CPU_CORES/$CPU_THREADS"
+	echo -e "\t${BOLD}CPU Sockets/Cores/Threads${NC}:$CPU_SOCKETS/$CPU_CORES/$CPU_THREADS"
 
 	if [[ -z "$SHORT" ]]; then
 		CPUS_USAGE=()
@@ -847,7 +848,7 @@ while true; do
 		echo
 
 		if [[ -z "$SHORT" ]]; then
-			printf 'For \e]8;;https://github.com/tdulcet/Linux-System-Information/\e\\system information\e]8;;\e\\, run: wget https://raw.github.com/tdulcet/Linux-System-Information/master/info.sh -qO - | bash -s'
+			printf 'For \e]8;;https://github.com/tdulcet/Linux-System-Information/\e\\system information\e]8;;\e\\, run: wget https://raw.github.com/tdulcet/Linux-System-Information/master/info.sh -qO - | bash -s\n'
 		fi
 		
 		break
