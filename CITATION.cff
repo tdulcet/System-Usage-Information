@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: Linux System Usage Information Script
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Teal
+    family-names: Dulcet
+    orcid: 'https://orcid.org/0009-0008-6616-2631'
+repository-code: 'https://github.com/tdulcet/System-Usage-Information'
+abstract: >-
+  Outputs system usage information on Linux, including:
+  processor usage, load average, pressure stall average,
+  temperatures, memory and swap space usage, idle time,
+  processes/threads, disk space and IO usage, network usage,
+  graphics processor usage, battery and uptime.
+license: GPL-3.0
+version: '1.0'

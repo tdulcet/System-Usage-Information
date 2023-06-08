@@ -3,16 +3,16 @@ Linux System Usage Information Script
 
 Copyright © 2020 Teal Dulcet
 
-Outputs system usage information on Linux, including:
+Script to quickly output system usage information on Linux, including:
 
 * Processor (CPU) usage
-	* CPU Cores/Threads
+	* CPU Sockets/Cores/Threads
 	* CPU Thread usage
 * Load average (1, 5, 15 minutes)
 * ^^Pressure Stall (PSI) average (10 seconds, 1, 5 minutes)
-	* ^^PSI Some CPU
-	* ^^PSI Some RAM
-	* ^^PSI Some IO
+	* PSI Some CPU
+	* PSI Some RAM
+	* PSI Some IO
 * \*Temperature(es)
 * Memory (RAM) usage
 * Swap space usage
@@ -23,8 +23,8 @@ Outputs system usage information on Linux, including:
 * Disk IO usage (read/write)
 * Network usage (receive/transmit)
 * ^Graphics Processor (GPU) usage
-	* ^GPU Memory (RAM) usage
-	* ^GPU Temperature(es)
+	* GPU Memory (RAM) usage
+	* GPU Temperature(es)
 * \*Battery (percentage charged and status)
 * Uptime
 * Hostname (FQDN)
@@ -39,7 +39,7 @@ Outputs system usage information on Linux, including:
 
 RAM, swap space, disk and network usage is output in both IEC (powers of 1024) and SI (powers of 1000) units, but with [more precision](https://github.com/tdulcet/Numbers-Tool#comparison-of---to-option) then the [numfmt](https://www.gnu.org/software/coreutils/manual/html_node/numfmt-invocation.html) command from GNU Coreutils. Uses [terminal colors and formatting](https://misc.flogisoft.com/bash/tip_colors_and_formatting) to output the information to the console. For the colors, green means good, yellow means warning and red means critical.
 
-Useful for displaying a [message of the day](https://en.wikipedia.org/wiki/Motd_(Unix)) (motd) upon login on Linux. All the values are saved to variables, which makes this easy to incorporate into larger scripts.
+Requires Bash 4+. Compared to similar programs, this script outputs much more information. Useful for displaying a [message of the day](https://en.wikipedia.org/wiki/Motd_(Unix)) (motd) upon login on Linux. All the values are saved to variables, which makes this easy to incorporate into larger scripts.
 
 To monitor the status of one or more servers, please see the [Remote Servers Status Monitoring](https://github.com/tdulcet/Remote-Servers-Status) script.
 

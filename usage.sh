@@ -89,7 +89,7 @@ DIM='\e[2m'
 DEFAULT='\e[39m' # Default Color
 NC='\e[m' # No Color
 
-suffix_power_char=("" "K" "M" "G" "T" "P" "E" "Z" "Y")
+suffix_power_char=("" "K" "M" "G" "T" "P" "E" "Z" "Y" "R" "Q")
 
 # Check if on Linux
 if ! echo "$OSTYPE" | grep -iq "linux"; then
@@ -265,18 +265,18 @@ outputunit() {
 	anumber=$(echo "$number" | awk 'function abs(x) { return x<0 ? -x : x } { num=abs($1); printf "%.15g", num + (num<10 ? 0.0005 : (num<100 ? 0.005 : (num<1000 ? 0.05 : 0.5))) }')
 
 	if (( $(echo "$number $anumber" | awk '{ print $1!=0 && $2<1000 }') )) && [[ $power -gt 0 ]]; then
-		str=$(printf '%g' "${number/./$decimal_point}")
+		printf -v str "%'g" "${number/./$decimal_point}"
 
 		((length=5 + ($(echo "$number" | awk '{ print $1<0 }') ? 1 : 0)))
 		if [[ ${#str} -gt $length ]]; then
 			prec=$(echo "$anumber" | awk '{ print $1<10 ? 3 : ($1<100 ? 2 : 1) }')
-			str=$(printf "%'.*f" "$prec" "${number/./$decimal_point}")
+			printf -v str "%'.*f" "$prec" "${number/./$decimal_point}"
 		fi
 	else
-		str=$(printf "%'.0f" "${number/./$decimal_point}")
+		printf -v str "%'.0f" "${number/./$decimal_point}"
 	fi
 	
-	if [[ $power -lt 9 ]]; then
+	if [[ $power -lt ${#suffix_power_char[*]} ]]; then
 		str+=${suffix_power_char[power]}
 	else
 		str+="(error)"
@@ -308,22 +308,22 @@ outputusage() {
 
 # BtoKiB <Bytes>
 BtoKiB() {
-	echo "$(printf "%'d" $(( $1 / 1024 )))KiB/s"
+	printf "%'dKiB/s\n" $(( $1 / 1024 ))
 }
 
 # BtoKB <Bytes>
 BtoKB() {
-	echo "$(printf "%'d" $(( $1 / 1000 )))KB/s"
+	printf "%'dKB/s\n" $(( $1 / 1000 ))
 }
 
 # BtoKib <Bytes>
 BtoKib() {
-	echo "$(printf "%'d" $(( $1 / 128 )))Kib/s"
+	printf "%'dKib/s\n" $(( $1 / 128 ))
 }
 
 # BtoKb <Bytes>
 BtoKb() {
-	echo "$(printf "%'d" $(( $1 / 125 )))Kbps"
+	printf "%'dKbps\n" $(( $1 / 125 ))
 }
 
 # outputcpuusage <usage percentage> [label]
@@ -360,33 +360,30 @@ outputpressure() {
 }
 
 # Celsius to Fahrenheit
-# ctof <temperature>
+# ctof
 ctof() {
-	echo "$1" | awk '{ printf "%.15g", ($1 * (9 / 5)) + 32 }'
+	awk '{ printf "%.15g\n", ($1 * (9 / 5)) + 32 }'
 }
 
-# outputcputemp <temperature> [critical temperature] [warning temperature]
+# outputcputemp <temperature> <temperature Celsius> <temperature Fahrenheit> [critical temperature] [warning temperature]
 outputcputemp() {
-	local temp c f
-	temp=$(echo "$1" | awk '{ printf "%.15g", $1 / 1000 }')
-	c=$(printf "%.1f" "${temp/./$decimal_point}")
-	f=$(ctof "$temp")
-	f=$(printf "%.1f" "${f/./$decimal_point}")
-	if [[ $1 -ge ${2:-$((CPU_TEMP_CRITICAL * 1000))} ]]; then
+	local c f
+	printf -v c "%.1f" "${2/./$decimal_point}"
+	printf -v f "%.1f" "${3/./$decimal_point}"
+	if [[ $1 -ge ${4:-$((CPU_TEMP_CRITICAL * 1000))} ]]; then
 		echo -e "${RED}$c${DEFAULT}°C ${DIM}(${RED}$f${DEFAULT}°F)${NC}"
-	elif [[ $1 -ge ${3:-$((CPU_TEMP_WARNING * 1000))} ]]; then
+	elif [[ $1 -ge ${5:-$((CPU_TEMP_WARNING * 1000))} ]]; then
 		echo -e "${YELLOW}$c${DEFAULT}°C ${DIM}(${YELLOW}$f${DEFAULT}°F)${NC}"
 	else
 		echo -e "${GREEN}$c${DEFAULT}°C ${DIM}(${GREEN}$f${DEFAULT}°F)${NC}"
 	fi
 }
 
-# outputgputemp <temperature>
+# outputgputemp <temperature Celsius> <temperature Fahrenheit>
 outputgputemp() {
 	local c f
-	c=$(printf "%.1f" "${1/./$decimal_point}")
-	f=$(ctof "$1")
-	f=$(printf "%.1f" "${f/./$decimal_point}")
+	printf -v c "%.1f" "${1/./$decimal_point}"
+	printf -v f "%.1f" "${2/./$decimal_point}"
 	if (( $(echo "$1 $GPU_TEMP_CRITICAL" | awk '{ print ($1>=$2) }') )); then
 		echo -e "${RED}$c${DEFAULT}°C ${DIM}(${RED}$f${DEFAULT}°F)${NC}"
 	elif (( $(echo "$1 $GPU_TEMP_WARNING" | awk '{ print ($1>=$2) }') )); then
@@ -405,10 +402,10 @@ fi
 
 CPU_THREADS=$(nproc --all) # $(lscpu | grep -i '^cpu(s)' | sed -n 's/^.\+:[[:blank:]]*//p')
 CPU_CORES=$(lscpu -ap | grep -v '^#' | awk -F, '{ print $2 }' | sort -nu | wc -l)
-CPU_SOCKETS=$(lscpu | grep -i '^socket(s)' | sed -n 's/^.\+:[[:blank:]]*//p') # $(lscpu -ap | grep -v '^#' | awk -F, '{ print $3 }' | sort -nu | wc -l)
+CPU_SOCKETS=$(lscpu | grep -i '^\(socket\|cluster\)(s)' | sed -n 's/^.\+:[[:blank:]]*//p' | tail -n 1) # $(lscpu -ap | grep -v '^#' | awk -F, '{ print $3 }' | sort -nu | wc -l)
 DISKS=$(lsblk -dbn 2>/dev/null | awk '$6=="disk"')
-NAMES=( $(echo "$DISKS" | awk '{print $1}') )
-INERFACES=( $(ip -o a show up primary scope global | awk '{print $2}' | uniq) )
+NAMES=( $(echo "$DISKS" | awk '{ print $1 }') )
+INERFACES=( $(ip -o a show up primary scope global | awk '{ print $2 }' | uniq) )
 PREVIOUS_STATS=$(</proc/stat)
 DISK_NAMES=()
 PREVIOUS_DISK_STATS=()
@@ -459,16 +456,16 @@ while true; do
 	LOADAVG=( $(</proc/loadavg) )
 	file=/proc/pressure
 	if [[ -z "$SHORT" && -d "$file" ]]; then
-		CPU_PRESSURE=( $(awk -F'[ =]' '/^some/ {print $3,$5,$7}' "$file/cpu") )
-		MEM_PRESSURE=( $(awk -F'[ =]' '/^some/ {print $3,$5,$7}' "$file/memory") )
-		IO_PRESSURE=( $(awk -F'[ =]' '/^some/ {print $3,$5,$7}' "$file/io") )
+		CPU_PRESSURE=( $(awk -F'[ =]' '/^some/ { print $3,$5,$7 }' "$file/cpu") )
+		MEM_PRESSURE=( $(awk -F'[ =]' '/^some/ { print $3,$5,$7 }' "$file/memory") )
+		IO_PRESSURE=( $(awk -F'[ =]' '/^some/ { print $3,$5,$7 }' "$file/io") )
 	fi
 	CPU_FREQ=( $(sed -n 's/^cpu MHz[[:blank:]]*: *//p' /proc/cpuinfo) )
 	if [[ -z "$CPU_FREQ" ]] || [[ $CPU_THREADS -gt 1 && $(printf '%s\n' "${CPU_FREQ[@]}" | sort -nu | wc -l) -eq 1 ]]; then
-		for file in /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq; do
+		for file in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq; do
 			if [[ -r "$file" ]]; then
 				CPU_FREQ=()
-				# CPU_FREQ=( $(awk '{ printf "%.15g\n", $1 / 1000 }' /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq) )
+				# CPU_FREQ=( $(awk '{ printf "%.15g\n", $1 / 1000 }' /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq) )
 				for (( i=0; ; ++i )); do
 					file="/sys/devices/system/cpu/cpu$i/cpufreq/scaling_cur_freq"
 					if [[ -r "$file" ]]; then
@@ -537,7 +534,7 @@ while true; do
 	PROCESSES=$(echo "$PROCESSES" | wc -l)
 	# for process in /proc/[0-9]*; do
 		# ((++PROCESSES))
-		# if [[ $(awk '/^State:/ {print $2}' "$process/status" 2>/dev/null) == "Z" ]]; then
+		# if [[ $(awk '/^State:/ { print $2 }' "$process/status" 2>/dev/null) == "Z" ]]; then
 			# ((++ZOMBIES))
 		# fi
 		# # for thread in "$process"/task/[0-9]*; do
@@ -561,7 +558,7 @@ while true; do
 			break
 		fi
 	done
-	UPTIME=$(awk '{print int($1)}' /proc/uptime)
+	UPTIME=$(awk '{ print int($1) }' /proc/uptime)
 	
 	if [[ -n "$WATCH" ]]; then
 		# tput cup 0 0
@@ -604,37 +601,39 @@ while true; do
 	fi
 
 	if [[ -n "$TEMP" ]]; then
+		tempc=( $(printf '%s\n' "${TEMP[@]}" | awk '{ printf "%.15g\n", $1 / 1000 }') )
+		tempf=( $(printf '%s\n' "${tempc[@]}" | ctof) )
 		echo -e -n "${BOLD}Temperature$([[ ${#TEMP[*]} -gt 1 ]] && echo "s")${NC}:\t\t\t"
 		for i in "${!TEMP[@]}"; do
-			echo -e -n "$([[ $i -gt 0 ]] && echo ", ")$([[ -n "${TEMP_LABEL[i]}" ]] && echo "${BOLD}${TEMP_LABEL[i]}${NC}: ")$(outputcputemp "${TEMP[i]}" "${TEMP_HIGH[i]}" "${TEMP_CRITICAL[i]}")"
+			echo -e -n "$([[ $i -gt 0 ]] && echo ", ")$([[ -n "${TEMP_LABEL[i]}" ]] && echo "${BOLD}${TEMP_LABEL[i]}${NC}: ")$(outputcputemp "${TEMP[i]}" "${tempc[i]}" "${tempf[i]}" "${TEMP_HIGH[i]}" "${TEMP_CRITICAL[i]}")"
 		done
 		echo
 	fi
 
-	TOTAL_PHYSICAL_MEM=$(echo "$MEMINFO" | awk '/^MemTotal:/ {print $2}')
-	USED_PHYSICAL_MEM=$(( TOTAL_PHYSICAL_MEM + $(echo "$MEMINFO" | awk '/^MemFree:|^Buffers:|^Cached:|^SReclaimable:/ {printf " - "$2}') ))
+	TOTAL_PHYSICAL_MEM=$(echo "$MEMINFO" | awk '/^MemTotal:/ { print $2 }')
+	USED_PHYSICAL_MEM=$(( TOTAL_PHYSICAL_MEM + $(echo "$MEMINFO" | awk '/^MemFree:|^Buffers:|^Cached:|^SReclaimable:/ { printf " - "$2 }') ))
 	echo -e "${BOLD}Memory (RAM) usage${NC}:\t\t$(outputusage "$USED_PHYSICAL_MEM" "$TOTAL_PHYSICAL_MEM" "$RAM_CRITICAL" "$RAM_WARNING")"
 
-	TOTAL_SWAP=$(echo "$MEMINFO" | awk '/^SwapTotal:/ {print $2}')
-	USED_SWAP=$(( TOTAL_SWAP - $(echo "$MEMINFO" | awk '/^SwapFree:/ {print $2}') ))
+	TOTAL_SWAP=$(echo "$MEMINFO" | awk '/^SwapTotal:/ { print $2 }')
+	USED_SWAP=$(( TOTAL_SWAP - $(echo "$MEMINFO" | awk '/^SwapFree:/ { print $2 }') ))
 	echo -e "${BOLD}Swap space usage${NC}:\t\t$(outputusage "$USED_SWAP" "$TOTAL_SWAP" "$SWAP_CRITICAL" "$SWAP_WARNING")"
 
-	USERS=$(who -s | awk '{print $1}' | sort -u | wc -l)
+	USERS=$(who -s | awk '{ print $1 }' | sort -u | wc -l)
 	echo -e "${BOLD}Users logged in${NC}:\t\t$USERS"
 
 	# awk '{if ($1!="'"$USER"'") { print $2 }}'
 	IDLE=$(who -s | awk '{ print $2 }' | (cd /dev && xargs -r stat -c '%U %X' 2>/dev/null) | awk '{ print '"${EPOCHSECONDS:-$(date +%s)}"'-$2"\t"$1 }' | sort -n)
 	if [[ -n "$IDLE" ]]; then
-		echo -e "${BOLD}Idle time (last activity)${NC}:\t$(getSecondsAsDigitalClock "$(echo "$IDLE" | head -n 1 | awk '{print $1}')")"
+		echo -e "${BOLD}Idle time (last activity)${NC}:\t$(getSecondsAsDigitalClock "$(echo "$IDLE" | head -n 1 | awk '{ print $1 }')")"
 	fi
 
 	echo -e "${BOLD}Processes/Threads${NC}:\t\t$PROCESSES/$THREADS$([[ $ZOMBIES -gt 0 ]] && echo " (${RED}$ZOMBIES zombie process$([[ $ZOMBIES -gt 1 ]] && echo "es")${NC})")"
 
 	DISK_USAGE=$(df -k / /home ~ | tail -n +2 | uniq)
 	if [[ -n "$DISK_USAGE" ]]; then
-		DISK_MOUNT=( $(echo "$DISK_USAGE" | awk '{print $6}') )
-		TOTAL_DISK=( $(echo "$DISK_USAGE" | awk '{print $2}') )
-		USED_DISK=( $(echo "$DISK_USAGE" | awk '{print $3}') )
+		DISK_MOUNT=( $(echo "$DISK_USAGE" | awk '{ print $6 }') )
+		TOTAL_DISK=( $(echo "$DISK_USAGE" | awk '{ print $2 }') )
+		USED_DISK=( $(echo "$DISK_USAGE" | awk '{ print $3 }') )
 		echo -e -n "${BOLD}Disk space usage${NC}:\t\t"
 		for i in "${!DISK_MOUNT[@]}"; do
 			if [[ ${TOTAL_DISK[i]} -gt 0 ]]; then
@@ -721,8 +720,8 @@ while true; do
 		if [[ -n "$TOTAL_GPU_MEM" && -n "$USED_GPU_MEM" ]]; then
 			echo -e -n "\t${BOLD}GPU Memory (RAM) usage${NC}:\t"
 			for i in "${!TOTAL_GPU_MEM[@]}"; do
-				total=$(echo "${TOTAL_GPU_MEM[i]}" | awk '{print $1}')
-				used=$(echo "${USED_GPU_MEM[i]}" | awk '{print $1}')
+				total=$(echo "${TOTAL_GPU_MEM[i]}" | awk '{ print $1 }')
+				used=$(echo "${USED_GPU_MEM[i]}" | awk '{ print $1 }')
 				usage=$([[ $total -gt 0 ]] && echo "$used $total" | awk '{ printf "%.15g", $1 / $2 * 100 }' || echo "0")
 				echo -n "$([[ $i -gt 0 ]] && echo ", ")"
 				if (( $(echo "$usage $GPU_RAM_CRITICAL" | awk '{ print ($1>=$2) }') )); then
@@ -739,9 +738,10 @@ while true; do
 		
 		mapfile -t GPU_TEMP < <(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader | grep -iv 'not supported')
 		if [[ -n "$GPU_TEMP" ]]; then
+			gpu_tempf=( $(printf '%s\n' "${GPU_TEMP[@]}" | ctof) )
 			echo -e -n "\t${BOLD}GPU Temperature$([[ ${#GPU_TEMP[*]} -gt 1 ]] && echo "s")${NC}:\t"
 			for i in "${!GPU_TEMP[@]}"; do
-				echo -n "$([[ $i -gt 0 ]] && echo ", ")$(outputgputemp "${GPU_TEMP[i]}")"
+				echo -n "$([[ $i -gt 0 ]] && echo ", ")$(outputgputemp "${GPU_TEMP[i]}" "${gpu_tempf[i]}")"
 			done
 			echo
 		fi
@@ -764,19 +764,19 @@ while true; do
 	HOSTNAME_FQDN=$(hostname -f) # hostname -A
 	echo -e "${BOLD}Private Hostname${NC}:\t\t$HOSTNAME_FQDN"
 
-	mapfile -t IPv4_ADDRESS < <(ip -o -4 a show up scope global | awk '{print $2,$4}')
+	mapfile -t IPv4_ADDRESS < <(ip -o -4 a show up scope global | awk '{ print $2,$4 }')
 	if [[ -n "$IPv4_ADDRESS" ]]; then
-		IPv4_INERFACES=( $(printf '%s\n' "${IPv4_ADDRESS[@]}" | awk '{print $1}') )
-		IPv4_ADDRESS=( $(printf '%s\n' "${IPv4_ADDRESS[@]}" | awk '{print $2}') )
+		IPv4_INERFACES=( $(printf '%s\n' "${IPv4_ADDRESS[@]}" | awk '{ print $1 }') )
+		IPv4_ADDRESS=( $(printf '%s\n' "${IPv4_ADDRESS[@]}" | awk '{ print $2 }') )
 		echo -e -n "${BOLD}Private IPv4 address$([[ ${#IPv4_ADDRESS[*]} -gt 1 ]] && echo "es")${NC}:\t\t"
 		for i in "${!IPv4_INERFACES[@]}"; do
 			echo -e "$([[ $i -gt 0 ]] && echo "\t\t\t\t")${BOLD}${IPv4_INERFACES[i]}${NC}: ${IPv4_ADDRESS[i]%/*}"
 		done
 	fi
-	mapfile -t IPv6_ADDRESS < <(ip -o -6 a show up scope global | awk '{print $2,$4}')
+	mapfile -t IPv6_ADDRESS < <(ip -o -6 a show up scope global | awk '{ print $2,$4 }')
 	if [[ -n "$IPv6_ADDRESS" ]]; then
-		IPv6_INERFACES=( $(printf '%s\n' "${IPv6_ADDRESS[@]}" | awk '{print $1}') )
-		IPv6_ADDRESS=( $(printf '%s\n' "${IPv6_ADDRESS[@]}" | awk '{print $2}') )
+		IPv6_INERFACES=( $(printf '%s\n' "${IPv6_ADDRESS[@]}" | awk '{ print $1 }') )
+		IPv6_ADDRESS=( $(printf '%s\n' "${IPv6_ADDRESS[@]}" | awk '{ print $2 }') )
 		echo -e -n "${BOLD}Private IPv6 address$([[ ${#IPv6_ADDRESS[*]} -gt 1 ]] && echo "es")${NC}:\t\t"
 		for i in "${!IPv6_INERFACES[@]}"; do
 			echo -e "$([[ $i -gt 0 ]] && echo "\t\t\t\t")${BOLD}${IPv6_INERFACES[i]}${NC}: ${IPv6_ADDRESS[i]%/*}"
