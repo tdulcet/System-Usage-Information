@@ -9,7 +9,7 @@ Script to quickly output system usage information on Linux, including:
 	* CPU Sockets/Cores/Threads
 	* CPU Thread usage
 * Load average (1, 5, 15 minutes)
-* ^^Pressure Stall (PSI) average (10 seconds, 1, 5 minutes)
+* ‡Pressure Stall (PSI) average (10 seconds, 1, 5 minutes)
 	* PSI Some CPU
 	* PSI Some RAM
 	* PSI Some IO
@@ -22,24 +22,24 @@ Script to quickly output system usage information on Linux, including:
 * Disk space usage
 * Disk IO usage (read/write)
 * Network usage (receive/transmit)
-* ^Graphics Processor (GPU) usage
+* †Graphics Processor (GPU) usage
 	* GPU Memory (RAM) usage
 	* GPU Temperature(es)
 * \*Battery (percentage charged and status)
 * Uptime
 * Hostname (FQDN)
 * Private IP address(es)
-* \*\*[Public IP address](https://github.com/major/icanhaz)(es)
-* \*\*[Weather](https://github.com/chubin/wttr.in)
+* ^[Public IP address](https://github.com/major/icanhaz)(es)
+* ^[Weather](https://github.com/chubin/wttr.in)
 
 \* If present\
-\*\* Optional\
-^ Requires Nvidia GPU(s)\
-^^ Requires Linux kernel ≥ 4.20
+^ Optional\
+† Requires Nvidia GPU(s)\
+‡ Requires Linux kernel ≥ 4.20
 
 RAM, swap space, disk and network usage is output in both IEC (powers of 1024) and SI (powers of 1000) units, but with [more precision](https://github.com/tdulcet/Numbers-Tool#comparison-of---to-option) then the [numfmt](https://www.gnu.org/software/coreutils/manual/html_node/numfmt-invocation.html) command from GNU Coreutils. Uses [terminal colors and formatting](https://misc.flogisoft.com/bash/tip_colors_and_formatting) to output the information to the console. For the colors, green means good, yellow means warning and red means critical.
 
-Requires Bash 4+. Compared to similar programs, this script outputs much more information. Useful for displaying a [message of the day](https://en.wikipedia.org/wiki/Motd_(Unix)) (motd) upon login on Linux. All the values are saved to variables, which makes this easy to incorporate into larger scripts.
+Requires at least Bash 4+. Compared to similar programs, this script outputs much more information. Useful for displaying a [message of the day](https://en.wikipedia.org/wiki/Motd_(Unix)) (motd) upon login on Linux. All the values are saved to variables, which makes this easy to incorporate into larger scripts.
 
 To monitor the status of one or more servers, please see the [Remote Servers Status Monitoring](https://github.com/tdulcet/Remote-Servers-Status) script.
 
@@ -58,13 +58,13 @@ See [Help](#help) below for full usage information.
 ### wget
 
 ```bash
-wget https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh -qO - | bash -s --
+wget -qO - https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh | bash -s --
 ```
 
 ### curl
 
 ```bash
-curl https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh | bash -s --
+curl -sL https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh | bash -s --
 ```
 
 ### Message of the day (motd)
@@ -113,6 +113,7 @@ Pull requests welcome! Ideas for contributions:
 * Add more system usage information
 	* Show Wi-Fi signal quality without using the deprecated [Wireless tools](https://en.wikipedia.org/wiki/Wireless_tools_for_Linux) or `/proc/net/wireless` file.
 	* Show total Disk IO and Network usage.
+	* Show power/energy usage.
 * Add more examples
 * Improve the performance
 * Support more GPUs

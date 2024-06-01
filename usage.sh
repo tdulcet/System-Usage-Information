@@ -2,7 +2,7 @@
 
 # Teal Dulcet
 # Outputs system usage information
-# wget https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh -qO - | bash -s --
+# wget -qO - https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh | bash -s --
 # ./usage.sh
 
 # Set the variables below
@@ -73,7 +73,7 @@ DNS="1.1.1.1" # Cloudflare
 # DNS="2001:4860:4860::8888" # Google Public DNS
 
 # Public IP address service URL
-# To find the service with the best HTTPS response times on your network, run this script: wget https://raw.github.com/tdulcet/Linux-System-Information/master/ipinfo.sh -qO - | bash -s
+# To find the service with the best HTTPS response times on your network, run this script: wget -qO - https://raw.github.com/tdulcet/Linux-System-Information/master/ipinfo.sh | bash -s
 PUBLIC_IP_URL="https://icanhazip.com/"
 
 # Do not change anything below this
@@ -89,10 +89,10 @@ DIM='\e[2m'
 DEFAULT='\e[39m' # Default Color
 NC='\e[m' # No Color
 
-suffix_power_char=("" "K" "M" "G" "T" "P" "E" "Z" "Y" "R" "Q")
+suffix_power_char=('' K M G T P E Z Y R Q)
 
 # Check if on Linux
-if ! echo "$OSTYPE" | grep -iq "linux"; then
+if ! echo "$OSTYPE" | grep -iq '^linux'; then
 	echo "Error: This script must be run on Linux." >&2
 	exit 1
 fi
@@ -166,8 +166,8 @@ getSecondsAsDigitalClock() {
 	local sec_num=$1
 	local d=$(( sec_num / 86400 ))
 	local h=$(( (sec_num % 86400) / 3600 ))
-	local m=$(( (sec_num % 86400 % 3600) / 60 ))
-	local s=$(( sec_num % 86400 % 3600 % 60 ))
+	local m=$(( (sec_num % 3600) / 60 ))
+	local s=$(( sec_num % 60 ))
 	local text=''
 	if [[ $d -ne 0 ]]; then
 		text+="$(printf "%'d" "$d") days "
@@ -182,11 +182,11 @@ getSecondsAsDigitalClock() {
 	echo "$text"
 }
 
-# cpuusage [CPU number]
+# cpuusage <CPU index> [CPU number]
 cpuusage() {
 	local diff_idle diff_total
-	local previous_cpu=( $(echo "$PREVIOUS_STATS" | sed -n "s/^cpu$1 \+//p") )
-	local cpu=( $(echo "$STATS" | sed -n "s/^cpu$1 \+//p") )
+	local previous_cpu=( ${previous_stats[$1]#cpu$2 } )
+	local cpu=( ${stats[$1]#cpu$2 } )
 
 	local previous_total=0
 	for i in "${previous_cpu[@]::8}"; do
@@ -293,8 +293,8 @@ outputunit() {
 # outputusage <used KiB> <total KiB> <critical percentage> <warning percentage>
 outputusage() {
 	local usage
-	local used=$(( $1 * 1024 ))
-	local total=$(( $2 * 1024 ))
+	local used=$(( $1 << 10 ))
+	local total=$(( $2 << 10 ))
 	usage=$([[ $2 -gt 0 ]] && echo "$1 $2" | awk '{ printf "%.15g", $1 / $2 * 100 }' || echo "0")
 	if (( $(echo "$usage $3" | awk '{ print ($1>=$2) }') )); then
 		bar "$usage" "${RED}"
@@ -308,7 +308,7 @@ outputusage() {
 
 # BtoKiB <Bytes>
 BtoKiB() {
-	printf "%'dKiB/s\n" $(( $1 / 1024 ))
+	printf "%'dKiB/s\n" $(( $1 >> 10 ))
 }
 
 # BtoKB <Bytes>
@@ -395,14 +395,40 @@ outputgputemp() {
 
 if [[ -n "$WATCH" ]]; then
 	tput smcup
-	# echo -e -n "\e7\e[?47h"
+	# printf "\e7\e[?47h"
 	trap 'tput rmcup' EXIT
-	# trap 'echo -e -n "\e[2J\e[?47l\e8"' EXIT
+	# trap 'printf "\e[2J\e[?47l\e8"' EXIT
 fi
 
 CPU_THREADS=$(nproc --all) # $(lscpu | grep -i '^cpu(s)' | sed -n 's/^.\+:[[:blank:]]*//p')
-CPU_CORES=$(lscpu -ap | grep -v '^#' | awk -F, '{ print $2 }' | sort -nu | wc -l)
-CPU_SOCKETS=$(lscpu | grep -i '^\(socket\|cluster\)(s)' | sed -n 's/^.\+:[[:blank:]]*//p' | tail -n 1) # $(lscpu -ap | grep -v '^#' | awk -F, '{ print $3 }' | sort -nu | wc -l)
+declare -A lists
+for file in /sys/devices/system/cpu/cpu[0-9]*/topology/core_cpus_list; do
+	if [[ -r "$file" ]]; then
+		lists[$(<"$file")]=1
+	fi
+done
+if ! (( ${#lists[*]} )); then
+	for file in /sys/devices/system/cpu/cpu[0-9]*/topology/thread_siblings_list; do
+		if [[ -r "$file" ]]; then
+			lists[$(<"$file")]=1
+		fi
+	done
+fi
+CPU_CORES=${#lists[*]} # $(lscpu -ap | grep -v '^#' | cut -d, -f2 | sort -nu | wc -l)
+lists=()
+for file in /sys/devices/system/cpu/cpu[0-9]*/topology/package_cpus_list; do
+	if [[ -r "$file" ]]; then
+		lists[$(<"$file")]=1
+	fi
+done
+if ! (( ${#lists[*]} )); then
+	for file in /sys/devices/system/cpu/cpu[0-9]*/topology/core_siblings_list; do
+		if [[ -r "$file" ]]; then
+			lists[$(<"$file")]=1
+		fi
+	done
+fi
+CPU_SOCKETS=${#lists[*]} # $(lscpu -ap | grep -v '^#' | cut -d, -f3 | sort -nu | wc -l) # $(lscpu | grep -i '^\(socket\|cluster\)(s)' | sed -n 's/^.\+:[[:blank:]]*//p' | tail -n 1)
 DISKS=$(lsblk -dbn 2>/dev/null | awk '$6=="disk"')
 NAMES=( $(echo "$DISKS" | awk '{ print $1 }') )
 INERFACES=( $(ip -o a show up primary scope global | awk '{ print $2 }' | uniq) )
@@ -462,18 +488,10 @@ while true; do
 	fi
 	CPU_FREQ=( $(sed -n 's/^cpu MHz[[:blank:]]*: *//p' /proc/cpuinfo) )
 	if [[ -z "$CPU_FREQ" ]] || [[ $CPU_THREADS -gt 1 && $(printf '%s\n' "${CPU_FREQ[@]}" | sort -nu | wc -l) -eq 1 ]]; then
-		for file in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq; do
+		files=( /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq )
+		for file in "${files[@]}"; do
 			if [[ -r "$file" ]]; then
-				CPU_FREQ=()
-				# CPU_FREQ=( $(awk '{ printf "%.15g\n", $1 / 1000 }' /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq) )
-				for (( i=0; ; ++i )); do
-					file="/sys/devices/system/cpu/cpu$i/cpufreq/scaling_cur_freq"
-					if [[ -r "$file" ]]; then
-						CPU_FREQ+=( "$(awk '{ printf "%.15g", $1 / 1000 }' "$file")" )
-					else
-						break
-					fi
-				done
+				CPU_FREQ=( $(printf '%s\n' "${files[@]}" | sort -V | xargs awk '{ printf "%.15g\n", $1 / 1000 }') )
 			fi
 			break
 		done
@@ -482,7 +500,7 @@ while true; do
 	TEMP_LABEL=()
 	TEMP_HIGH=()
 	TEMP_CRITICAL=()
-	for file in /sys/class/hwmon/hwmon*/temp*_input; do
+	for file in /sys/class/hwmon/hwmon[0-9]*/temp[0-9]*_input; do
 		if [[ -r "$file" ]]; then
 			TEMP+=( "$(<"$file")" )
 			file=${file%_*}
@@ -504,7 +522,7 @@ while true; do
 		fi
 	done
 	if [[ -z "$TEMP" ]]; then
-		for file in /sys/class/thermal/thermal_zone*/temp; do
+		for file in /sys/class/thermal/thermal_zone[0-9]*/temp; do
 			if [[ -r "$file" ]]; then
 				TEMP+=( "$(<"$file")" )
 				file=${file%/*}
@@ -543,7 +561,7 @@ while true; do
 		# threads=( "$process"/task/[0-9]* )
 		# ((THREADS+=${#threads[*]}))
 	# done
-	for file in /sys/class/power_supply/[B,b]*; do
+	for file in /sys/class/power_supply/[B,b]*/; do
 		if [[ -d "$file" ]]; then
 			if [[ -r "$file/energy_now" && -r "$file/energy_full" ]]; then
 				BATTERY_CAPACITY=$(echo "$(<"$file/energy_now") $(<"$file/energy_full")" | awk '{ printf "%.15g", $1 / $2 * 100 }')
@@ -562,13 +580,15 @@ while true; do
 	
 	if [[ -n "$WATCH" ]]; then
 		# tput cup 0 0
-		echo -e -n "\e[1;1H" # "\e[2J"
+		printf '\e[1;1H' # '\e[2J'
 	fi
 
 	printf '\e]8;;https://github.com/tdulcet/System-Usage-Information/\e\\System usage information\e]8;;\e\\ as of '
 	date
 
-	CPU_USAGE=$(cpuusage)
+	mapfile -t stats < <(echo "$STATS" | grep '^cpu[0-9]* ')
+	mapfile -t previous_stats < <(echo "$PREVIOUS_STATS" | grep '^cpu[0-9]* ')
+	CPU_USAGE=$(cpuusage 0)
 	cpu_freq=${CPU_FREQ:+$(printf '%s\n' "${CPU_FREQ[@]}" | sort -nr | head -n 1)}
 	echo -e "\n${BOLD}Processor (CPU) usage${NC}:\t\t$(outputcpuusage "$CPU_USAGE" "${cpu_freq:+$(printf "%'.0f" "${cpu_freq/./$decimal_point}") MHz}")"
 
@@ -576,12 +596,8 @@ while true; do
 
 	if [[ -z "$SHORT" ]]; then
 		CPUS_USAGE=()
-		for (( i=0; ; ++i )); do
-			if echo "$STATS" | grep -q "^cpu$i "; then
-				CPUS_USAGE+=( "$(cpuusage "$i")" )
-			else
-				break
-			fi
+		for (( i = 1; i < ${#stats[*]}; ++i )); do
+			CPUS_USAGE+=( "$(cpuusage $i $((i - 1)))" )
 		done
 		if [[ $CPU_THREADS -gt 1 ]]; then
 			echo -e "\t${BOLD}CPU Thread usage${NC}:"
@@ -605,7 +621,8 @@ while true; do
 		tempf=( $(printf '%s\n' "${tempc[@]}" | ctof) )
 		echo -e -n "${BOLD}Temperature$([[ ${#TEMP[*]} -gt 1 ]] && echo "s")${NC}:\t\t\t"
 		for i in "${!TEMP[@]}"; do
-			echo -e -n "$([[ $i -gt 0 ]] && echo ", ")$([[ -n "${TEMP_LABEL[i]}" ]] && echo "${BOLD}${TEMP_LABEL[i]}${NC}: ")$(outputcputemp "${TEMP[i]}" "${tempc[i]}" "${tempf[i]}" "${TEMP_HIGH[i]}" "${TEMP_CRITICAL[i]}")"
+			(( i )) && echo -n ", "
+			echo -e -n "$([[ -n "${TEMP_LABEL[i]}" ]] && echo "${BOLD}${TEMP_LABEL[i]}${NC}: ")$(outputcputemp "${TEMP[i]}" "${tempc[i]}" "${tempf[i]}" "${TEMP_HIGH[i]}" "${TEMP_CRITICAL[i]}")"
 		done
 		echo
 	fi
@@ -637,7 +654,8 @@ while true; do
 		echo -e -n "${BOLD}Disk space usage${NC}:\t\t"
 		for i in "${!DISK_MOUNT[@]}"; do
 			if [[ ${TOTAL_DISK[i]} -gt 0 ]]; then
-				echo -e "$([[ $i -gt 0 ]] && echo "\t\t\t\t")${BOLD}${DISK_MOUNT[i]}${NC}: $(outputusage "${USED_DISK[i]}" "${TOTAL_DISK[i]}" "$DISK_SPACE_CRITICAL" "$DISK_SPACE_WARNING")"
+				(( i )) && printf '\t\t\t\t'
+				echo -e "${BOLD}${DISK_MOUNT[i]}${NC}: $(outputusage "${USED_DISK[i]}" "${TOTAL_DISK[i]}" "$DISK_SPACE_CRITICAL" "$DISK_SPACE_WARNING")"
 			fi
 		done
 	fi
@@ -656,7 +674,8 @@ while true; do
 		echo -e -n "${BOLD}Disk IO usage${NC} (read/write):\t"
 		for i in "${!DISK_NAMES[@]}"; do
 			usage=$(echo "${DISK_TIMES[i]}" | awk '{ printf "%.15g", $1 / 10 }')
-			echo -e -n "$([[ $i -gt 0 ]] && echo "\t\t\t\t")${BOLD}${DISK_NAMES[i]}${NC}: "
+			(( i )) && printf '\t\t\t\t'
+			echo -e -n "${BOLD}${DISK_NAMES[i]}${NC}: "
 			if (( $(echo "$usage $DISK_CRITICAL" | awk '{ print ($1>=$2) }') )); then
 				bar "$usage" "${RED}"
 			elif (( $(echo "$usage $DISK_WARNING" | awk '{ print ($1>=$2) }') )); then
@@ -677,7 +696,8 @@ while true; do
 	if [[ -n "$NET_INERFACES" ]]; then
 		echo -e -n "${BOLD}Network usage${NC} (receive/transmit):"
 		for i in "${!NET_INERFACES[@]}"; do
-			echo -e -n "$([[ $i -gt 0 ]] && echo "\t\t\t\t")${BOLD}${NET_INERFACES[i]}${NC}: "
+			(( i )) && printf '\t\t\t\t'
+			echo -e -n "${BOLD}${NET_INERFACES[i]}${NC}: "
 			if [[ -n "${NET_SPEED[i]}" && ${NET_SPEED[i]} -gt 0 ]]; then
 				usage=$(echo "$(( NETR_USAGE[i] + NETT_USAGE[i] )) $(( NET_SPEED[i] * 125000 ))" | awk '{ printf "%.15g", $1 / $2 * 100 }')
 				if (( $(echo "$usage $NET_CRITICAL" | awk '{ print ($1>=$2) }') )); then
@@ -687,7 +707,7 @@ while true; do
 				else
 					bar "$usage" "${GREEN}"
 				fi
-				echo -e "  ${DIM}↓R${NC}: ${CYAN}$(BtoKib "${NETR_USAGE[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKb "${NETR_USAGE[i]}")${DEFAULT})${NC} ${DIM}↑T${NC}: ${MAGENTA}$(BtoKib "${NETT_USAGE[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKb "${NETT_USAGE[i]}")${DEFAULT})${NC} / $(printf "%'d" $(( ((NET_SPEED[i] * 1000000) / 1024) / 1024 )))Mib/s ${DIM}($(printf "%'d" "${NET_SPEED[i]}")Mbps)${NC}"
+				echo -e "  ${DIM}↓R${NC}: ${CYAN}$(BtoKib "${NETR_USAGE[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKb "${NETR_USAGE[i]}")${DEFAULT})${NC} ${DIM}↑T${NC}: ${MAGENTA}$(BtoKib "${NETT_USAGE[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKb "${NETT_USAGE[i]}")${DEFAULT})${NC} / $(printf "%'d" $(( (NET_SPEED[i] * 1000000) >> 20 )))Mib/s ${DIM}($(printf "%'d" "${NET_SPEED[i]}")Mbps)${NC}"
 			else
 				echo -e "${DIM}↓R${NC}: ${CYAN}$(BtoKib "${NETR_USAGE[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKb "${NETR_USAGE[i]}")${DEFAULT})${NC} ${DIM}↑T${NC}: ${MAGENTA}$(BtoKib "${NETT_USAGE[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKb "${NETT_USAGE[i]}")${DEFAULT})${NC}"
 			fi
@@ -701,7 +721,7 @@ while true; do
 		if [[ -n "$GPU_USAGE" ]]; then
 			echo -e -n "${BOLD}Graphics Processor (GPU) usage${NC}:\t"
 			for i in "${!GPU_USAGE[@]}"; do
-				echo -n "$([[ $i -gt 0 ]] && echo ", ")"
+				(( i )) && echo -n ", "
 				if (( $(echo "${GPU_USAGE[i]} $GPU_CRITICAL" | awk '{ print ($1>=$2) }') )); then
 					bar "${GPU_USAGE[i]}" "${RED}" "${GPU_FREQ[i]}"
 				elif (( $(echo "${GPU_USAGE[i]} $GPU_WARNING" | awk '{ print ($1>=$2) }') )); then
@@ -723,7 +743,7 @@ while true; do
 				total=$(echo "${TOTAL_GPU_MEM[i]}" | awk '{ print $1 }')
 				used=$(echo "${USED_GPU_MEM[i]}" | awk '{ print $1 }')
 				usage=$([[ $total -gt 0 ]] && echo "$used $total" | awk '{ printf "%.15g", $1 / $2 * 100 }' || echo "0")
-				echo -n "$([[ $i -gt 0 ]] && echo ", ")"
+				(( i )) && echo -n ", "
 				if (( $(echo "$usage $GPU_RAM_CRITICAL" | awk '{ print ($1>=$2) }') )); then
 					bar "$usage" "${RED}"
 				elif (( $(echo "$usage $GPU_RAM_WARNING" | awk '{ print ($1>=$2) }') )); then
@@ -741,7 +761,8 @@ while true; do
 			gpu_tempf=( $(printf '%s\n' "${GPU_TEMP[@]}" | ctof) )
 			echo -e -n "\t${BOLD}GPU Temperature$([[ ${#GPU_TEMP[*]} -gt 1 ]] && echo "s")${NC}:\t"
 			for i in "${!GPU_TEMP[@]}"; do
-				echo -n "$([[ $i -gt 0 ]] && echo ", ")$(outputgputemp "${GPU_TEMP[i]}" "${gpu_tempf[i]}")"
+				(( i )) && echo -n ", "
+				echo -n "$(outputgputemp "${GPU_TEMP[i]}" "${gpu_tempf[i]}")"
 			done
 			echo
 		fi
@@ -770,7 +791,8 @@ while true; do
 		IPv4_ADDRESS=( $(printf '%s\n' "${IPv4_ADDRESS[@]}" | awk '{ print $2 }') )
 		echo -e -n "${BOLD}Private IPv4 address$([[ ${#IPv4_ADDRESS[*]} -gt 1 ]] && echo "es")${NC}:\t\t"
 		for i in "${!IPv4_INERFACES[@]}"; do
-			echo -e "$([[ $i -gt 0 ]] && echo "\t\t\t\t")${BOLD}${IPv4_INERFACES[i]}${NC}: ${IPv4_ADDRESS[i]%/*}"
+			(( i )) && printf '\t\t\t\t'
+			echo -e "${BOLD}${IPv4_INERFACES[i]}${NC}: ${IPv4_ADDRESS[i]%/*}"
 		done
 	fi
 	mapfile -t IPv6_ADDRESS < <(ip -o -6 a show up scope global | awk '{ print $2,$4 }')
@@ -779,7 +801,8 @@ while true; do
 		IPv6_ADDRESS=( $(printf '%s\n' "${IPv6_ADDRESS[@]}" | awk '{ print $2 }') )
 		echo -e -n "${BOLD}Private IPv6 address$([[ ${#IPv6_ADDRESS[*]} -gt 1 ]] && echo "es")${NC}:\t\t"
 		for i in "${!IPv6_INERFACES[@]}"; do
-			echo -e "$([[ $i -gt 0 ]] && echo "\t\t\t\t")${BOLD}${IPv6_INERFACES[i]}${NC}: ${IPv6_ADDRESS[i]%/*}"
+			(( i )) && printf '\t\t\t\t'
+			echo -e "${BOLD}${IPv6_INERFACES[i]}${NC}: ${IPv6_ADDRESS[i]%/*}"
 		done
 	fi
 
@@ -848,7 +871,7 @@ while true; do
 		echo
 
 		if [[ -z "$SHORT" ]]; then
-			printf 'For \e]8;;https://github.com/tdulcet/Linux-System-Information/\e\\system information\e]8;;\e\\, run: wget https://raw.github.com/tdulcet/Linux-System-Information/master/info.sh -qO - | bash -s\n'
+			printf 'For \e]8;;https://github.com/tdulcet/Linux-System-Information/\e\\system information\e]8;;\e\\, run: wget -qO - https://raw.github.com/tdulcet/Linux-System-Information/master/info.sh | bash -s\n'
 		fi
 		
 		break
