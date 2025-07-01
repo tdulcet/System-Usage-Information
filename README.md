@@ -51,7 +51,7 @@ Also see the [Linux System Information](https://github.com/tdulcet/Linux-System-
 
 ## Usage
 
-Supports all modern Linux distributions and the [Windows Subsystem for Linux](https://en.wikipedia.org/wiki/Windows_Subsystem_for_Linux) (WSL).
+Supports all modern Linux distributions from the last 10+ years and the [Windows Subsystem for Linux](https://en.wikipedia.org/wiki/Windows_Subsystem_for_Linux) (WSL).
 
 See [Help](#help) below for full usage information.
 
@@ -96,6 +96,7 @@ Options:
     -s              Shorten output
                         Do not show CPU Thread usage and PSI averages. Useful for displaying a message of the day (motd).
     -u              Use Unicode usage bars
+    -n              No color
 
     -h              Display this help and exit
     -v              Output version information and exit
@@ -105,6 +106,8 @@ Examples:
     $ usage -pw
 
 ```
+
+It respects the [`NO_COLOR`](https://no-color.org/) and [`FORCE_COLOR`](https://force-color.org/ ) environment variables.
 
 ## Contributing
 

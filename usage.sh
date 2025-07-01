@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Teal Dulcet
+# Copyright © Teal Dulcet
 # Outputs system usage information
 # wget -qO - https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh | bash -s --
 # ./usage.sh
@@ -59,6 +59,9 @@ GPU_TEMP_WARNING=95
 BATTERY_LOW=10
 BATTERY_CRITICAL=5
 
+# Use color in output
+COLOR=1
+
 bar_length=40
 
 # Public DNS servers that validate responses DNS Security Extensions (DNSSEC) to use with the dig and delv commands
@@ -76,23 +79,15 @@ DNS="1.1.1.1" # Cloudflare
 # To find the service with the best HTTPS response times on your network, run this script: wget -qO - https://raw.github.com/tdulcet/Linux-System-Information/master/ipinfo.sh | bash -s
 PUBLIC_IP_URL="https://icanhazip.com/"
 
-# Do not change anything below this
+# dig/delv arguments
+dig_delv_args=(${DNS:+"@$DNS"})
 
-RED='\e[31m'
-GREEN='\e[32m'
-YELLOW='\e[33m'
-# BLUE='\e[34m'
-MAGENTA='\e[35m'
-CYAN='\e[36m'
-BOLD='\e[1m'
-DIM='\e[2m'
-DEFAULT='\e[39m' # Default Color
-NC='\e[m'        # No Color
+# Do not change anything below this
 
 suffix_power_char=('' K M G T P E Z Y R Q)
 
 # Check if on Linux
-if ! echo "$OSTYPE" | grep -iq '^linux'; then
+if [[ $OSTYPE != linux* ]]; then
 	echo "Error: This script must be run on Linux." >&2
 	exit 1
 fi
@@ -110,6 +105,7 @@ Options:
     -s              Shorten output
                         Do not show CPU Thread usage and PSI averages. Useful for displaying a message of the day (motd).
     -u              Use Unicode usage bars
+    -n              No color
 
     -h              Display this help and exit
     -v              Output version information and exit
@@ -120,11 +116,18 @@ Examples:
 " >&2
 }
 
-while getopts "hpsuvwW" c; do
+if [[ -n $NO_COLOR ]]; then
+	COLOR=''
+fi
+
+while getopts "hnpsuvwW" c; do
 	case ${c} in
 		h)
 			usage "$0"
 			exit 0
+			;;
+		n)
+			COLOR=''
 			;;
 		p)
 			PUBLIC_IP=1
@@ -158,24 +161,41 @@ if [[ $# -ne 0 ]]; then
 	exit 1
 fi
 
+if [[ -n $FORCE_COLOR ]]; then
+	COLOR=1
+fi
+
+if [[ -n $COLOR ]]; then
+	RED='\e[31m'
+	GREEN='\e[32m'
+	YELLOW='\e[33m'
+	# BLUE='\e[34m'
+	MAGENTA='\e[35m'
+	CYAN='\e[36m'
+	BOLD='\e[1m'
+	DIM='\e[2m'
+	DEFAULT='\e[39m' # Default Color
+	RESET_ALL='\e[m'
+fi
+
 decimal_point=$(locale decimal_point)
 
 # Adapted from: https://github.com/tdulcet/Remote-Servers-Status/blob/master/status.sh
-# getSecondsAsDigitalClock <seconds>
-getSecondsAsDigitalClock() {
-	local sec_num=$1
-	local d=$((sec_num / 86400))
-	local h=$(((sec_num % 86400) / 3600))
-	local m=$(((sec_num % 3600) / 60))
-	local s=$((sec_num % 60))
+# outputduration <seconds>
+outputduration() {
+	local sec=$1
+	local d=$((sec / 86400))
+	local h=$(((sec % 86400) / 3600))
+	local m=$(((sec % 3600) / 60))
+	local s=$((sec % 60))
 	local text=''
-	if [[ $d -ne 0 ]]; then
+	if (( d )); then
 		text+="$(printf "%'d" "$d") days "
 	fi
-	if [[ $d -ne 0 || $h -ne 0 ]]; then
+	if (( d || h )); then
 		text+="$h hours "
 	fi
-	if [[ $d -ne 0 || $h -ne 0 || $m -ne 0 ]]; then
+	if (( d || h || m )); then
 		text+="$m minutes "
 	fi
 	text+="$s seconds"
@@ -224,7 +244,7 @@ bar() {
 		fi
 
 		output="${prog// /|}${total}${label}"
-		echo -e -n "[${2}${output::usage}${2:+${NC}}${output:usage}]"
+		echo -e -n "[${2}${output::usage}${2:+${RESET_ALL}}${output:usage}]"
 	else
 		local label abar_length usage prog total
 		label="$(printf "%5.1f" "${1/./$decimal_point}")%"
@@ -236,7 +256,7 @@ bar() {
 		printf -v total "%$(((abar_length - usage) / 8))s"
 
 		blocks=("" "▏" "▎" "▍" "▌" "▋" "▊" "▉")
-		echo -e -n "${label} [${2}${prog// /█}${blocks[usage % 8]}${2:+${NC}}${total}]${3:+ $3}"
+		echo -e -n "${label} [${2}${prog// /█}${blocks[usage % 8]}${2:+${RESET_ALL}}${total}]${3:+ $3}"
 	fi
 }
 
@@ -303,7 +323,7 @@ outputusage() {
 	else
 		bar "$usage" "${GREEN}"
 	fi
-	echo -e "  ${CYAN}$(outputunit "$used" 0)B${DEFAULT}/${MAGENTA}$(outputunit "$total" 0)B${DEFAULT}$([[ $2 -gt 0 ]] && echo " ${DIM}(${CYAN}$(outputunit "$used" 1)B${DEFAULT}/${MAGENTA}$(outputunit "$total" 1)B${DEFAULT})${NC}")"
+	echo -e "  ${CYAN}$(outputunit "$used" 0)B${DEFAULT}/${MAGENTA}$(outputunit "$total" 0)B${DEFAULT}$([[ $2 -gt 0 ]] && echo " ${DIM}(${CYAN}$(outputunit "$used" 1)B${DEFAULT}/${MAGENTA}$(outputunit "$total" 1)B${DEFAULT})${RESET_ALL}")"
 }
 
 # BtoKiB <Bytes>
@@ -371,11 +391,11 @@ outputcputemp() {
 	printf -v c "%.1f" "${2/./$decimal_point}"
 	printf -v f "%.1f" "${3/./$decimal_point}"
 	if [[ $1 -ge ${4:-$((CPU_TEMP_CRITICAL * 1000))} ]]; then
-		echo -e "${RED}$c${DEFAULT}°C ${DIM}(${RED}$f${DEFAULT}°F)${NC}"
+		echo -e "${RED}$c${DEFAULT}°C ${DIM}(${RED}$f${DEFAULT}°F)${RESET_ALL}"
 	elif [[ $1 -ge ${5:-$((CPU_TEMP_WARNING * 1000))} ]]; then
-		echo -e "${YELLOW}$c${DEFAULT}°C ${DIM}(${YELLOW}$f${DEFAULT}°F)${NC}"
+		echo -e "${YELLOW}$c${DEFAULT}°C ${DIM}(${YELLOW}$f${DEFAULT}°F)${RESET_ALL}"
 	else
-		echo -e "${GREEN}$c${DEFAULT}°C ${DIM}(${GREEN}$f${DEFAULT}°F)${NC}"
+		echo -e "${GREEN}$c${DEFAULT}°C ${DIM}(${GREEN}$f${DEFAULT}°F)${RESET_ALL}"
 	fi
 }
 
@@ -385,11 +405,11 @@ outputgputemp() {
 	printf -v c "%.1f" "${1/./$decimal_point}"
 	printf -v f "%.1f" "${2/./$decimal_point}"
 	if (($(echo "$1 $GPU_TEMP_CRITICAL" | awk '{ print ($1>=$2) }'))); then
-		echo -e "${RED}$c${DEFAULT}°C ${DIM}(${RED}$f${DEFAULT}°F)${NC}"
+		echo -e "${RED}$c${DEFAULT}°C ${DIM}(${RED}$f${DEFAULT}°F)${RESET_ALL}"
 	elif (($(echo "$1 $GPU_TEMP_WARNING" | awk '{ print ($1>=$2) }'))); then
-		echo -e "${YELLOW}$c${DEFAULT}°C ${DIM}(${YELLOW}$f${DEFAULT}°F)${NC}"
+		echo -e "${YELLOW}$c${DEFAULT}°C ${DIM}(${YELLOW}$f${DEFAULT}°F)${RESET_ALL}"
 	else
-		echo -e "${GREEN}$c${DEFAULT}°C ${DIM}(${GREEN}$f${DEFAULT}°F)${NC}"
+		echo -e "${GREEN}$c${DEFAULT}°C ${DIM}(${GREEN}$f${DEFAULT}°F)${RESET_ALL}"
 	fi
 }
 
@@ -400,7 +420,11 @@ if [[ -n $WATCH ]]; then
 	# trap 'printf "\e[2J\e[?47l\e8"' EXIT
 fi
 
-CPU_THREADS=$(nproc --all) # $(lscpu | grep -i '^cpu(s)' | sed -n 's/^.\+:[[:blank:]]*//p')
+if command -v nproc >/dev/null; then
+	CPU_THREADS=$(nproc --all)
+else
+	CPU_THREADS=$(getconf _NPROCESSORS_CONF) # $(lscpu | grep -i '^cpu(s)' | sed -n 's/^.\+:[[:blank:]]*//p')
+fi
 declare -A lists
 for file in /sys/devices/system/cpu/cpu[0-9]*/topology/core_cpus_list; do
 	if [[ -r $file ]]; then
@@ -429,8 +453,30 @@ if ! ((${#lists[*]})); then
 	done
 fi
 CPU_SOCKETS=${#lists[*]} # $(lscpu -ap | grep -v '^#' | cut -d, -f3 | sort -nu | wc -l) # $(lscpu | grep -i '^\(socket\|cluster\)(s)' | sed -n 's/^.\+:[[:blank:]]*//p' | tail -n 1)
-DISKS=$(lsblk -dbn 2>/dev/null | awk '$6=="disk"')
-NAMES=( $(echo "$DISKS" | awk '{ print $1 }') )
+# DISKS=$(lsblk -dbn 2>/dev/null | awk '$6=="disk"')
+# NAMES=($(echo "$DISKS" | awk '{ print $1 }'))
+NAMES=()
+for dir in /sys/block/*; do
+	if [[ -d $dir ]]; then
+		name=${dir##*/}
+		if [[ -r "$dir/hidden" ]] && (($(<"$dir/hidden"))); then
+			continue
+		fi
+		dev=$(<"$dir/dev")
+		maj=${dev%%:*}
+		if [[ $maj -eq 1 ]]; then
+			continue
+		fi
+		size=$(<"$dir/size")
+		if ! ((size)); then
+			continue
+		fi
+		RE='^(dm-|loop|md)'
+		if [[ ! $name =~ $RE ]] && ! (($(<"$dir/device/type"))); then
+			NAMES+=("$name")
+		fi
+	fi
+done
 INERFACES=($(ip -o a show up primary scope global | awk '{ print $2 }' | uniq))
 PREVIOUS_STATS=$(</proc/stat)
 DISK_NAMES=()
@@ -590,9 +636,9 @@ while true; do
 	mapfile -t previous_stats < <(echo "$PREVIOUS_STATS" | grep '^cpu[0-9]* ')
 	CPU_USAGE=$(cpuusage 0)
 	cpu_freq=${CPU_FREQ:+$(printf '%s\n' "${CPU_FREQ[@]}" | sort -nr | head -n 1)}
-	echo -e "\n${BOLD}Processor (CPU) usage${NC}:\t\t$(outputcpuusage "$CPU_USAGE" "${cpu_freq:+$(printf "%'.0f" "${cpu_freq/./$decimal_point}") MHz}")"
+	echo -e "\n${BOLD}Processor (CPU) usage${RESET_ALL}:\t\t$(outputcpuusage "$CPU_USAGE" "${cpu_freq:+$(printf "%'.0f" "${cpu_freq/./$decimal_point}") MHz}")"
 
-	echo -e "\t${BOLD}CPU Sockets/Cores/Threads${NC}:$CPU_SOCKETS/$CPU_CORES/$CPU_THREADS"
+	echo -e "\t${BOLD}CPU Sockets/Cores/Threads${RESET_ALL}:$CPU_SOCKETS/$CPU_CORES/$CPU_THREADS"
 
 	if [[ -z $SHORT ]]; then
 		CPUS_USAGE=()
@@ -600,62 +646,62 @@ while true; do
 			CPUS_USAGE+=("$(cpuusage $i $((i - 1)))")
 		done
 		if [[ $CPU_THREADS -gt 1 ]]; then
-			echo -e "\t${BOLD}CPU Thread usage${NC}:"
+			echo -e "\t${BOLD}CPU Thread usage${RESET_ALL}:"
 			for i in "${!CPUS_USAGE[@]}"; do
-				echo -e "${BOLD}$(printf "%'3d" $((i + 1)))${NC}: $(outputcpuusage "${CPUS_USAGE[i]}" "${CPU_FREQ:+$(printf "%'.0f" "${CPU_FREQ[i]/./$decimal_point}") MHz}")"
+				echo -e "${BOLD}$(printf "%'3d" $((i + 1)))${RESET_ALL}: $(outputcpuusage "${CPUS_USAGE[i]}" "${CPU_FREQ:+$(printf "%'.0f" "${CPU_FREQ[i]/./$decimal_point}") MHz}")"
 			done | column
 		fi
 	fi
 
-	echo -e "${BOLD}Load average${NC} (${BOLD}1${NC}, 5, ${DIM}15${NC} minutes):${BOLD}$(outputloadavg "${LOADAVG[0]}")${NC}, $(outputloadavg "${LOADAVG[1]}"), ${DIM}$(outputloadavg "${LOADAVG[2]}")${NC}"
+	echo -e "${BOLD}Load average${RESET_ALL} (${BOLD}1${RESET_ALL}, 5, ${DIM}15${RESET_ALL} minutes):${BOLD}$(outputloadavg "${LOADAVG[0]}")${RESET_ALL}, $(outputloadavg "${LOADAVG[1]}"), ${DIM}$(outputloadavg "${LOADAVG[2]}")${RESET_ALL}"
 
 	if [[ -z $SHORT && -n $CPU_PRESSURE && -n $MEM_PRESSURE && -n $IO_PRESSURE ]]; then
-		echo -e "${BOLD}Pressure Stall (PSI) average${NC} (${BOLD}10 seconds${NC}, 1, ${DIM}5${NC} minutes)"
-		echo -e "\t${BOLD}PSI Some CPU${NC}:\t\t${BOLD}$(outputpressure "${CPU_PRESSURE[0]}")${NC}, $(outputpressure "${CPU_PRESSURE[1]}"), ${DIM}$(outputpressure "${CPU_PRESSURE[2]}")${NC}"
-		echo -e "\t${BOLD}PSI Some RAM${NC}:\t\t${BOLD}$(outputpressure "${MEM_PRESSURE[0]}")${NC}, $(outputpressure "${MEM_PRESSURE[1]}"), ${DIM}$(outputpressure "${MEM_PRESSURE[2]}")${NC}"
-		echo -e "\t${BOLD}PSI Some IO${NC}:\t\t${BOLD}$(outputpressure "${IO_PRESSURE[0]}")${NC}, $(outputpressure "${IO_PRESSURE[1]}"), ${DIM}$(outputpressure "${IO_PRESSURE[2]}")${NC}"
+		echo -e "${BOLD}Pressure Stall (PSI) average${RESET_ALL} (${BOLD}10 seconds${RESET_ALL}, 1, ${DIM}5${RESET_ALL} minutes)"
+		echo -e "\t${BOLD}PSI Some CPU${RESET_ALL}:\t\t${BOLD}$(outputpressure "${CPU_PRESSURE[0]}")${RESET_ALL}, $(outputpressure "${CPU_PRESSURE[1]}"), ${DIM}$(outputpressure "${CPU_PRESSURE[2]}")${RESET_ALL}"
+		echo -e "\t${BOLD}PSI Some RAM${RESET_ALL}:\t\t${BOLD}$(outputpressure "${MEM_PRESSURE[0]}")${RESET_ALL}, $(outputpressure "${MEM_PRESSURE[1]}"), ${DIM}$(outputpressure "${MEM_PRESSURE[2]}")${RESET_ALL}"
+		echo -e "\t${BOLD}PSI Some IO${RESET_ALL}:\t\t${BOLD}$(outputpressure "${IO_PRESSURE[0]}")${RESET_ALL}, $(outputpressure "${IO_PRESSURE[1]}"), ${DIM}$(outputpressure "${IO_PRESSURE[2]}")${RESET_ALL}"
 	fi
 
 	if [[ -n $TEMP ]]; then
 		tempc=($(printf '%s\n' "${TEMP[@]}" | awk '{ printf "%.15g\n", $1 / 1000 }'))
 		tempf=($(printf '%s\n' "${tempc[@]}" | ctof))
-		echo -e -n "${BOLD}Temperature$([[ ${#TEMP[*]} -gt 1 ]] && echo "s")${NC}:\t\t\t"
+		echo -e -n "${BOLD}Temperature$([[ ${#TEMP[*]} -gt 1 ]] && echo "s")${RESET_ALL}:\t\t\t"
 		for i in "${!TEMP[@]}"; do
 			((i)) && echo -n ", "
-			echo -e -n "$([[ -n ${TEMP_LABEL[i]} ]] && echo "${BOLD}${TEMP_LABEL[i]}${NC}: ")$(outputcputemp "${TEMP[i]}" "${tempc[i]}" "${tempf[i]}" "${TEMP_HIGH[i]}" "${TEMP_CRITICAL[i]}")"
+			echo -e -n "$([[ -n ${TEMP_LABEL[i]} ]] && echo "${BOLD}${TEMP_LABEL[i]}${RESET_ALL}: ")$(outputcputemp "${TEMP[i]}" "${tempc[i]}" "${tempf[i]}" "${TEMP_HIGH[i]}" "${TEMP_CRITICAL[i]}")"
 		done
 		echo
 	fi
 
 	TOTAL_PHYSICAL_MEM=$(echo "$MEMINFO" | awk '/^MemTotal:/ { print $2 }')
 	USED_PHYSICAL_MEM=$((TOTAL_PHYSICAL_MEM + $(echo "$MEMINFO" | awk '/^MemFree:|^Buffers:|^Cached:|^SReclaimable:/ { printf " - "$2 }')))
-	echo -e "${BOLD}Memory (RAM) usage${NC}:\t\t$(outputusage "$USED_PHYSICAL_MEM" "$TOTAL_PHYSICAL_MEM" "$RAM_CRITICAL" "$RAM_WARNING")"
+	echo -e "${BOLD}Memory (RAM) usage${RESET_ALL}:\t\t$(outputusage "$USED_PHYSICAL_MEM" "$TOTAL_PHYSICAL_MEM" "$RAM_CRITICAL" "$RAM_WARNING")"
 
 	TOTAL_SWAP=$(echo "$MEMINFO" | awk '/^SwapTotal:/ { print $2 }')
 	USED_SWAP=$((TOTAL_SWAP - $(echo "$MEMINFO" | awk '/^SwapFree:/ { print $2 }')))
-	echo -e "${BOLD}Swap space usage${NC}:\t\t$(outputusage "$USED_SWAP" "$TOTAL_SWAP" "$SWAP_CRITICAL" "$SWAP_WARNING")"
+	echo -e "${BOLD}Swap space usage${RESET_ALL}:\t\t$(outputusage "$USED_SWAP" "$TOTAL_SWAP" "$SWAP_CRITICAL" "$SWAP_WARNING")"
 
 	USERS=$(who -s | awk '{ print $1 }' | sort -u | wc -l)
-	echo -e "${BOLD}Users logged in${NC}:\t\t$USERS"
+	echo -e "${BOLD}Users logged in${RESET_ALL}:\t\t$USERS"
 
 	# awk '{if ($1!="'"$USER"'") { print $2 }}'
 	IDLE=$(who -s | awk '{ print $2 }' | (cd /dev && xargs -r stat -c '%U %X' 2>/dev/null) | awk '{ print '"${EPOCHSECONDS:-$(date +%s)}"'-$2"\t"$1 }' | sort -n)
 	if [[ -n $IDLE ]]; then
-		echo -e "${BOLD}Idle time (last activity)${NC}:\t$(getSecondsAsDigitalClock "$(echo "$IDLE" | head -n 1 | awk '{ print $1 }')")"
+		echo -e "${BOLD}Idle time (last activity)${RESET_ALL}:\t$(outputduration "$(echo "$IDLE" | head -n 1 | awk '{ print $1 }')")"
 	fi
 
-	echo -e "${BOLD}Processes/Threads${NC}:\t\t$PROCESSES/$THREADS$([[ $ZOMBIES -gt 0 ]] && echo " (${RED}$ZOMBIES zombie process$([[ $ZOMBIES -gt 1 ]] && echo "es")${NC})")"
+	echo -e "${BOLD}Processes/Threads${RESET_ALL}:\t\t$PROCESSES/$THREADS$([[ $ZOMBIES -gt 0 ]] && echo " (${RED}$ZOMBIES zombie process$([[ $ZOMBIES -gt 1 ]] && echo "es")${RESET_ALL})")"
 
 	DISK_USAGE=$(df -k / /home ~ | tail -n +2 | uniq)
 	if [[ -n $DISK_USAGE ]]; then
 		DISK_MOUNT=($(echo "$DISK_USAGE" | awk '{ print $6 }'))
 		TOTAL_DISK=($(echo "$DISK_USAGE" | awk '{ print $2 }'))
 		USED_DISK=($(echo "$DISK_USAGE" | awk '{ print $3 }'))
-		echo -e -n "${BOLD}Disk space usage${NC}:\t\t"
+		echo -e -n "${BOLD}Disk space usage${RESET_ALL}:\t\t"
 		for i in "${!DISK_MOUNT[@]}"; do
 			if [[ ${TOTAL_DISK[i]} -gt 0 ]]; then
 				((i)) && printf '\t\t\t\t'
-				echo -e "${BOLD}${DISK_MOUNT[i]}${NC}: $(outputusage "${USED_DISK[i]}" "${TOTAL_DISK[i]}" "$DISK_SPACE_CRITICAL" "$DISK_SPACE_WARNING")"
+				echo -e "${BOLD}${DISK_MOUNT[i]}${RESET_ALL}: $(outputusage "${USED_DISK[i]}" "${TOTAL_DISK[i]}" "$DISK_SPACE_CRITICAL" "$DISK_SPACE_WARNING")"
 			fi
 		done
 	fi
@@ -671,11 +717,11 @@ while true; do
 		DISK_TIMES+=("$((disk_stat[9] - previous_disk_stat[9]))")
 	done
 	if [[ -n $DISK_NAMES ]]; then
-		echo -e -n "${BOLD}Disk IO usage${NC} (read/write):\t"
+		echo -e -n "${BOLD}Disk IO usage${RESET_ALL} (read/write):\t"
 		for i in "${!DISK_NAMES[@]}"; do
 			usage=$(echo "${DISK_TIMES[i]}" | awk '{ printf "%.15g", $1 / 10 }')
 			((i)) && printf '\t\t\t\t'
-			echo -e -n "${BOLD}${DISK_NAMES[i]}${NC}: "
+			echo -e -n "${BOLD}${DISK_NAMES[i]}${RESET_ALL}: "
 			if (($(echo "$usage $DISK_CRITICAL" | awk '{ print ($1>=$2) }'))); then
 				bar "$usage" "${RED}"
 			elif (($(echo "$usage $DISK_WARNING" | awk '{ print ($1>=$2) }'))); then
@@ -683,7 +729,7 @@ while true; do
 			else
 				bar "$usage" "${GREEN}"
 			fi
-			echo -e "  ${DIM}R${NC}: ${CYAN}$(BtoKiB "${DISK_READS[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKB "${DISK_READS[i]}")${DEFAULT})${NC} ${DIM}W${NC}: ${MAGENTA}$(BtoKiB "${DISK_WRITES[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKB "${DISK_WRITES[i]}")${DEFAULT})${NC}"
+			echo -e "  ${DIM}R${RESET_ALL}: ${CYAN}$(BtoKiB "${DISK_READS[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKB "${DISK_READS[i]}")${DEFAULT})${RESET_ALL} ${DIM}W${RESET_ALL}: ${MAGENTA}$(BtoKiB "${DISK_WRITES[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKB "${DISK_WRITES[i]}")${DEFAULT})${RESET_ALL}"
 		done
 	fi
 
@@ -694,10 +740,10 @@ while true; do
 		NETT_USAGE+=("$((NETT[i] - PREVIOUS_NETT[i]))")
 	done
 	if [[ -n $NET_INERFACES ]]; then
-		echo -e -n "${BOLD}Network usage${NC} (receive/transmit):"
+		echo -e -n "${BOLD}Network usage${RESET_ALL} (receive/transmit):"
 		for i in "${!NET_INERFACES[@]}"; do
 			((i)) && printf '\t\t\t\t'
-			echo -e -n "${BOLD}${NET_INERFACES[i]}${NC}: "
+			echo -e -n "${BOLD}${NET_INERFACES[i]}${RESET_ALL}: "
 			if [[ -n ${NET_SPEED[i]} && ${NET_SPEED[i]} -gt 0 ]]; then
 				usage=$(echo "$((NETR_USAGE[i] + NETT_USAGE[i])) $((NET_SPEED[i] * 125000))" | awk '{ printf "%.15g", $1 / $2 * 100 }')
 				if (($(echo "$usage $NET_CRITICAL" | awk '{ print ($1>=$2) }'))); then
@@ -707,9 +753,9 @@ while true; do
 				else
 					bar "$usage" "${GREEN}"
 				fi
-				echo -e "  ${DIM}↓R${NC}: ${CYAN}$(BtoKib "${NETR_USAGE[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKb "${NETR_USAGE[i]}")${DEFAULT})${NC} ${DIM}↑T${NC}: ${MAGENTA}$(BtoKib "${NETT_USAGE[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKb "${NETT_USAGE[i]}")${DEFAULT})${NC} / $(printf "%'d" $(((NET_SPEED[i] * 1000000) >> 20)))Mib/s ${DIM}($(printf "%'d" "${NET_SPEED[i]}")Mbps)${NC}"
+				echo -e "  ${DIM}↓R${RESET_ALL}: ${CYAN}$(BtoKib "${NETR_USAGE[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKb "${NETR_USAGE[i]}")${DEFAULT})${RESET_ALL} ${DIM}↑T${RESET_ALL}: ${MAGENTA}$(BtoKib "${NETT_USAGE[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKb "${NETT_USAGE[i]}")${DEFAULT})${RESET_ALL} / $(printf "%'d" $(((NET_SPEED[i] * 1000000) >> 20)))Mib/s ${DIM}($(printf "%'d" "${NET_SPEED[i]}")Mbps)${RESET_ALL}"
 			else
-				echo -e "${DIM}↓R${NC}: ${CYAN}$(BtoKib "${NETR_USAGE[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKb "${NETR_USAGE[i]}")${DEFAULT})${NC} ${DIM}↑T${NC}: ${MAGENTA}$(BtoKib "${NETT_USAGE[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKb "${NETT_USAGE[i]}")${DEFAULT})${NC}"
+				echo -e "${DIM}↓R${RESET_ALL}: ${CYAN}$(BtoKib "${NETR_USAGE[i]}")${DEFAULT} ${DIM}(${CYAN}$(BtoKb "${NETR_USAGE[i]}")${DEFAULT})${RESET_ALL} ${DIM}↑T${RESET_ALL}: ${MAGENTA}$(BtoKib "${NETT_USAGE[i]}")${DEFAULT} ${DIM}(${MAGENTA}$(BtoKb "${NETT_USAGE[i]}")${DEFAULT})${RESET_ALL}"
 			fi
 		done
 	fi
@@ -719,7 +765,7 @@ while true; do
 		mapfile -t GPU_USAGE < <(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits | grep -iv 'not supported')
 		mapfile -t GPU_FREQ < <(nvidia-smi --query-gpu=clocks.gr --format=csv,noheader | grep -iv 'not supported')
 		if [[ -n $GPU_USAGE ]]; then
-			echo -e -n "${BOLD}Graphics Processor (GPU) usage${NC}:\t"
+			echo -e -n "${BOLD}Graphics Processor (GPU) usage${RESET_ALL}:\t"
 			for i in "${!GPU_USAGE[@]}"; do
 				((i)) && echo -n ", "
 				if (($(echo "${GPU_USAGE[i]} $GPU_CRITICAL" | awk '{ print ($1>=$2) }'))); then
@@ -732,13 +778,13 @@ while true; do
 			done
 			echo
 		else
-			echo -e "${BOLD}Graphics Processor (GPU)${NC}"
+			echo -e "${BOLD}Graphics Processor (GPU)${RESET_ALL}"
 		fi
 
 		mapfile -t TOTAL_GPU_MEM < <(nvidia-smi --query-gpu=memory.total --format=csv,noheader | grep -iv 'not supported')
 		mapfile -t USED_GPU_MEM < <(nvidia-smi --query-gpu=memory.used --format=csv,noheader | grep -iv 'not supported')
 		if [[ -n $TOTAL_GPU_MEM && -n $USED_GPU_MEM ]]; then
-			echo -e -n "\t${BOLD}GPU Memory (RAM) usage${NC}:\t"
+			echo -e -n "\t${BOLD}GPU Memory (RAM) usage${RESET_ALL}:\t"
 			for i in "${!TOTAL_GPU_MEM[@]}"; do
 				total=$(echo "${TOTAL_GPU_MEM[i]}" | awk '{ print $1 }')
 				used=$(echo "${USED_GPU_MEM[i]}" | awk '{ print $1 }')
@@ -759,7 +805,7 @@ while true; do
 		mapfile -t GPU_TEMP < <(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader | grep -iv 'not supported')
 		if [[ -n $GPU_TEMP ]]; then
 			gpu_tempf=($(printf '%s\n' "${GPU_TEMP[@]}" | ctof))
-			echo -e -n "\t${BOLD}GPU Temperature$([[ ${#GPU_TEMP[*]} -gt 1 ]] && echo "s")${NC}:\t"
+			echo -e -n "\t${BOLD}GPU Temperature$([[ ${#GPU_TEMP[*]} -gt 1 ]] && echo "s")${RESET_ALL}:\t"
 			for i in "${!GPU_TEMP[@]}"; do
 				((i)) && echo -n ", "
 				echo -n "$(outputgputemp "${GPU_TEMP[i]}" "${gpu_tempf[i]}")"
@@ -769,7 +815,7 @@ while true; do
 	fi
 
 	if [[ -n $BATTERY_CAPACITY ]]; then
-		echo -e -n "${BOLD}Battery${NC}:\t\t\t"
+		echo -e -n "${BOLD}Battery${RESET_ALL}:\t\t\t"
 		if (($(echo "$BATTERY_CAPACITY $BATTERY_CRITICAL" | awk '{ print ($1<=$2) }'))); then
 			bar "$BATTERY_CAPACITY" "${RED}"
 		elif (($(echo "$BATTERY_CAPACITY $BATTERY_LOW" | awk '{ print ($1<=$2) }'))); then
@@ -780,72 +826,72 @@ while true; do
 		echo "${BATTERY_STATUS:+ ($BATTERY_STATUS)}"
 	fi
 
-	echo -e "${BOLD}Uptime${NC}:\t\t\t\t$(getSecondsAsDigitalClock "$UPTIME")"
+	echo -e "${BOLD}Uptime${RESET_ALL}:\t\t\t\t$(outputduration "$UPTIME")"
 
 	HOSTNAME_FQDN=$(hostname -f) # hostname -A
-	echo -e "${BOLD}Private Hostname${NC}:\t\t$HOSTNAME_FQDN"
+	echo -e "${BOLD}Private Hostname${RESET_ALL}:\t\t$HOSTNAME_FQDN"
 
 	mapfile -t IPv4_ADDRESS < <(ip -o -4 a show up scope global | awk '{ print $2,$4 }')
 	if [[ -n $IPv4_ADDRESS ]]; then
 		IPv4_INERFACES=($(printf '%s\n' "${IPv4_ADDRESS[@]}" | awk '{ print $1 }'))
 		IPv4_ADDRESS=($(printf '%s\n' "${IPv4_ADDRESS[@]}" | awk '{ print $2 }'))
-		echo -e -n "${BOLD}Private IPv4 address$([[ ${#IPv4_ADDRESS[*]} -gt 1 ]] && echo "es")${NC}:\t\t"
+		echo -e -n "${BOLD}Private IPv4 address$([[ ${#IPv4_ADDRESS[*]} -gt 1 ]] && echo "es")${RESET_ALL}:\t\t"
 		for i in "${!IPv4_INERFACES[@]}"; do
 			((i)) && printf '\t\t\t\t'
-			echo -e "${BOLD}${IPv4_INERFACES[i]}${NC}: ${IPv4_ADDRESS[i]%/*}"
+			echo -e "${BOLD}${IPv4_INERFACES[i]}${RESET_ALL}: ${IPv4_ADDRESS[i]%/*}"
 		done
 	fi
 	mapfile -t IPv6_ADDRESS < <(ip -o -6 a show up scope global | awk '{ print $2,$4 }')
 	if [[ -n $IPv6_ADDRESS ]]; then
 		IPv6_INERFACES=($(printf '%s\n' "${IPv6_ADDRESS[@]}" | awk '{ print $1 }'))
 		IPv6_ADDRESS=($(printf '%s\n' "${IPv6_ADDRESS[@]}" | awk '{ print $2 }'))
-		echo -e -n "${BOLD}Private IPv6 address$([[ ${#IPv6_ADDRESS[*]} -gt 1 ]] && echo "es")${NC}:\t\t"
+		echo -e -n "${BOLD}Private IPv6 address$([[ ${#IPv6_ADDRESS[*]} -gt 1 ]] && echo "es")${RESET_ALL}:\t\t"
 		for i in "${!IPv6_INERFACES[@]}"; do
 			((i)) && printf '\t\t\t\t'
-			echo -e "${BOLD}${IPv6_INERFACES[i]}${NC}: ${IPv6_ADDRESS[i]%/*}"
+			echo -e "${BOLD}${IPv6_INERFACES[i]}${RESET_ALL}: ${IPv6_ADDRESS[i]%/*}"
 		done
 	fi
 
 	if [[ -n $PUBLIC_IP ]]; then
 		if PUBLIC_IPV4_ADDRESS=$(curl -4 -sS "$PUBLIC_IP_URL" 2>&1); then
 			if command -v delv >/dev/null; then
-				if if [[ -n $DNS ]]; then output=$(delv +short -x "$PUBLIC_IPV4_ADDRESS" "@$DNS" 2>&1); else output=$(delv +short -x "$PUBLIC_IPV4_ADDRESS" 2>&1); fi && [[ -n $output ]]; then
+				if output=$(delv +short -x "${dig_delv_args[@]}" "$PUBLIC_IPV4_ADDRESS" 2>&1) && [[ -n $output ]]; then
 					PUBLIC_IPV4_HOSTNAME=$(echo "$output" | grep -v '^;')
 				elif output=$(echo "$output" | grep -i '^;; resolution failed') && ! echo "$output" | grep -iq 'ncache'; then
 					echo "Error: Could not get reverse DNS (PTR) resource record: ${output#*: }"
 				fi
 			elif command -v dig >/dev/null; then
-				if if [[ -n $DNS ]]; then output=$(dig +short -x "$PUBLIC_IPV4_ADDRESS" "@$DNS"); else output=$(dig +short -x "$PUBLIC_IPV4_ADDRESS"); fi && [[ -n $output ]]; then
+				if output=$(dig +short -x "${dig_delv_args[@]}" "$PUBLIC_IPV4_ADDRESS") && [[ -n $output ]]; then
 					PUBLIC_IPV4_HOSTNAME=$output
 				elif [[ -n $output ]]; then
 					echo "Error: Could not get reverse DNS (PTR) resource record: $(echo "$output" | grep '^;;')"
 				fi
 			fi
 			if [[ -n $PUBLIC_IPV4_HOSTNAME ]]; then
-				echo -e "${BOLD}Public Hostname${NC}:\t\t$PUBLIC_IPV4_HOSTNAME"
+				echo -e "${BOLD}Public Hostname${RESET_ALL}:\t\t$PUBLIC_IPV4_HOSTNAME"
 			fi
-			printf "${BOLD}Public IPv4 address${NC}:\t\t%s\n" "$PUBLIC_IPV4_ADDRESS"
+			printf "${BOLD}Public IPv4 address${RESET_ALL}:\t\t%s\n" "$PUBLIC_IPV4_ADDRESS"
 		# else
 			# echo "Error getting the public IPv4 address: $(echo "$PUBLIC_IPV4_ADDRESS" | head -n 1 | sed -n 's/^[^:]\+: ([^)]\+) //p')" >&2
 		fi
 		if PUBLIC_IPV6_ADDRESS=$(curl -6 -sS "$PUBLIC_IP_URL" 2>&1); then
 			if command -v delv >/dev/null; then
-				if if [[ -n $DNS ]]; then output=$(delv +short -x "$PUBLIC_IPV6_ADDRESS" "@$DNS" 2>&1); else output=$(delv +short -x "$PUBLIC_IPV6_ADDRESS" 2>&1); fi && [[ -n $output ]]; then
+				if output=$(delv +short -x "${dig_delv_args[@]}" "$PUBLIC_IPV6_ADDRESS" 2>&1) && [[ -n $output ]]; then
 					PUBLIC_IPV6_HOSTNAME=$(echo "$output" | grep -v '^;')
 				elif output=$(echo "$output" | grep -i '^;; resolution failed') && ! echo "$output" | grep -iq 'ncache'; then
 					echo "Error: Could not get reverse DNS (PTR) resource record: ${output#*: }"
 				fi
 			elif command -v dig >/dev/null; then
-				if if [[ -n $DNS ]]; then output=$(dig +short -x "$PUBLIC_IPV6_ADDRESS" "@$DNS"); else output=$(dig +short -x "$PUBLIC_IPV6_ADDRESS"); fi && [[ -n $output ]]; then
+				if output=$(dig +short -x "${dig_delv_args[@]}" "$PUBLIC_IPV6_ADDRESS") && [[ -n $output ]]; then
 					PUBLIC_IPV6_HOSTNAME=$output
 				elif [[ -n $output ]]; then
 					echo "Error: Could not get reverse DNS (PTR) resource record: $(echo "$output" | grep '^;;')"
 				fi
 			fi
 			if [[ -n $PUBLIC_IPV6_HOSTNAME ]]; then
-				echo -e "${BOLD}Public Hostname${NC}:\t\t$PUBLIC_IPV6_HOSTNAME"
+				echo -e "${BOLD}Public Hostname${RESET_ALL}:\t\t$PUBLIC_IPV6_HOSTNAME"
 			fi
-			printf "${BOLD}Public IPv6 address${NC}:\t\t%s\n" "$PUBLIC_IPV6_ADDRESS"
+			printf "${BOLD}Public IPv6 address${RESET_ALL}:\t\t%s\n" "$PUBLIC_IPV6_ADDRESS"
 		# else
 			# echo "Error getting the public IPv6 address: $(echo "$PUBLIC_IPV6_ADDRESS" | head -n 1 | sed -n 's/^[^:]\+: ([^)]\+) //p')" >&2
 		fi
@@ -853,7 +899,7 @@ while true; do
 
 	if [[ -z $WATCH ]]; then
 		if [[ -z $SHORT ]]; then
-			echo -e "${BOLD}Language${NC}:\t\t\t$LANG"
+			echo -e "${BOLD}Language${RESET_ALL}:\t\t\t$LANG"
 		fi
 
 		# echo -e "Bash Version:\t\t\t$BASH_VERSION"
@@ -862,7 +908,7 @@ while true; do
 			if WEATHER=$(curl -sS https://wttr.in/?format=2 2>&1); then
 				printf "${BOLD}"
 				printf '\e]8;;https://wttr.in/\e\\Weather\e]8;;\e\\'
-				printf "${NC}:\t\t\t%s\n" "$WEATHER"
+				printf "${RESET_ALL}:\t\t\t%s\n" "$WEATHER"
 			else
 				echo "Error getting the weather: $(echo "$WEATHER" | head -n 1 | sed -n 's/^[^:]\+: ([^)]\+) //p')" >&2
 			fi
