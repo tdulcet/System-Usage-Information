@@ -178,7 +178,11 @@ if [[ -n $COLOR ]]; then
 	RESET_ALL='\e[m'
 fi
 
-decimal_point=$(locale decimal_point)
+if command -v locale >/dev/null; then
+	decimal_point=$(locale decimal_point)
+else
+	decimal_point=.
+fi
 
 # Adapted from: https://github.com/tdulcet/Remote-Servers-Status/blob/master/status.sh
 # outputduration <seconds>
@@ -471,8 +475,10 @@ for dir in /sys/block/*; do
 		if ! ((size)); then
 			continue
 		fi
-		RE='^(dm-|loop|md)'
-		if [[ ! $name =~ $RE ]] && ! (($(<"$dir/device/type"))); then
+		case $name in
+			dm-* | loop* | md*) continue ;;
+		esac
+		if [[ ! -r "$dir/device/type" ]] || ! (($(<"$dir/device/type"))); then
 			NAMES+=("$name")
 		fi
 	fi
@@ -591,22 +597,15 @@ while true; do
 		done
 	fi
 	MEMINFO=$(</proc/meminfo)
-	THREADS=$(ps --no-headers -eTo pid,spid,s)
-	PROCESSES=$(echo "$THREADS" | sort -nu)
-	THREADS=$(echo "$THREADS" | wc -l)
-	ZOMBIES=$(echo "$PROCESSES" | awk '$3=="Z"' | wc -l)
-	PROCESSES=$(echo "$PROCESSES" | wc -l)
-	# for process in /proc/[0-9]*; do
-		# ((++PROCESSES))
-		# if [[ $(awk '/^State:/ { print $2 }' "$process/status" 2>/dev/null) == "Z" ]]; then
-			# ((++ZOMBIES))
-		# fi
-		# # for thread in "$process"/task/[0-9]*; do
-			# # ((++THREADS))
-		# # done
-		# threads=( "$process"/task/[0-9]* )
-		# ((THREADS+=${#threads[*]}))
-	# done
+	# THREADS=$(ps --no-headers -eTo pid,spid,s)
+	# PROCESSES=$(echo "$THREADS" | sort -nu)
+	# THREADS=$(echo "$THREADS" | wc -l)
+	# ZOMBIES=$(echo "$PROCESSES" | awk '$3=="Z"' | wc -l)
+	# PROCESSES=$(echo "$PROCESSES" | wc -l)
+	processes=(/proc/[0-9]*/status)
+	PROCESSES=${#processes[*]}
+	ZOMBIES=$(awk '/^State:/ && $2=="Z"' "${processes[@]}" 2>/dev/null | wc -l)
+	THREADS=$(awk '/^Threads:/ { sum+=$2 } END { print sum }' "${processes[@]}" 2>/dev/null)
 	for file in /sys/class/power_supply/[B,b]*/; do
 		if [[ -d $file ]]; then
 			if [[ -r "$file/energy_now" && -r "$file/energy_full" ]]; then
@@ -649,7 +648,7 @@ while true; do
 			echo -e "\t${BOLD}CPU Thread usage${RESET_ALL}:"
 			for i in "${!CPUS_USAGE[@]}"; do
 				echo -e "${BOLD}$(printf "%'3d" $((i + 1)))${RESET_ALL}: $(outputcpuusage "${CPUS_USAGE[i]}" "${CPU_FREQ:+$(printf "%'.0f" "${CPU_FREQ[i]/./$decimal_point}") MHz}")"
-			done | column
+			done | if command -v column >/dev/null; then column; else cat; fi
 		fi
 	fi
 
@@ -681,11 +680,11 @@ while true; do
 	USED_SWAP=$((TOTAL_SWAP - $(echo "$MEMINFO" | awk '/^SwapFree:/ { print $2 }')))
 	echo -e "${BOLD}Swap space usage${RESET_ALL}:\t\t$(outputusage "$USED_SWAP" "$TOTAL_SWAP" "$SWAP_CRITICAL" "$SWAP_WARNING")"
 
-	USERS=$(who -s | awk '{ print $1 }' | sort -u | wc -l)
+	USERS=$(who | awk '{ print $1 }' | sort -u | wc -l)
 	echo -e "${BOLD}Users logged in${RESET_ALL}:\t\t$USERS"
 
 	# awk '{if ($1!="'"$USER"'") { print $2 }}'
-	IDLE=$(who -s | awk '{ print $2 }' | (cd /dev && xargs -r stat -c '%U %X' 2>/dev/null) | awk '{ print '"${EPOCHSECONDS:-$(date +%s)}"'-$2"\t"$1 }' | sort -n)
+	IDLE=$(who | awk '{ print $2 }' | (cd /dev && xargs -r stat -c '%U %X' 2>/dev/null) | awk '{ print '"${EPOCHSECONDS:-$(date +%s)}"'-$2"\t"$1 }' | sort -n)
 	if [[ -n $IDLE ]]; then
 		echo -e "${BOLD}Idle time (last activity)${RESET_ALL}:\t$(outputduration "$(echo "$IDLE" | head -n 1 | awk '{ print $1 }')")"
 	fi

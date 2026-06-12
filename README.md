@@ -1,3 +1,5 @@
+[![CI](https://github.com/tdulcet/System-Usage-Information/actions/workflows/ci.yml/badge.svg)](https://github.com/tdulcet/System-Usage-Information/actions/workflows/ci.yml)
+
 # System Usage Information
 Linux System Usage Information Script
 
