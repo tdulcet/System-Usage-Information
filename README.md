@@ -24,6 +24,7 @@ Script to quickly output system usage information on Linux, including:
 * Disk space usage
 * Disk IO usage (read/write)
 * Network usage (receive/transmit)
+* \*Wi-Fi signal quality 
 * †Graphics Processor (GPU) usage
 	* GPU Memory (RAM) usage
 	* GPU Temperature(es)
@@ -53,7 +54,7 @@ Also see the [Linux System Information](https://github.com/tdulcet/Linux-System-
 
 ## Usage
 
-Supports all modern Linux distributions from the last 10+ years and the [Windows Subsystem for Linux](https://en.wikipedia.org/wiki/Windows_Subsystem_for_Linux) (WSL).
+Supports all modern Linux distributions from the last 12+ years, including [BusyBox](https://en.wikipedia.org/wiki/BusyBox), [Toybox](https://en.wikipedia.org/wiki/Toybox) and the [Windows Subsystem for Linux](https://en.wikipedia.org/wiki/Windows_Subsystem_for_Linux) (WSL).
 
 See [Help](#help) below for full usage information.
 
@@ -66,7 +67,7 @@ wget -qO - https://raw.github.com/tdulcet/System-Usage-Information/master/usage.
 ### curl
 
 ```bash
-curl -sL https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh | bash -s --
+curl -sfL https://raw.github.com/tdulcet/System-Usage-Information/master/usage.sh | bash -s --
 ```
 
 ### Message of the day (motd)
@@ -109,14 +110,13 @@ Examples:
 
 ```
 
-It respects the [`NO_COLOR`](https://no-color.org/) and [`FORCE_COLOR`](https://force-color.org/ ) environment variables.
+It respects the [`NO_COLOR`](https://no-color.org/) and [`FORCE_COLOR`](https://force-color.org/) environment variables.
 
 ## Contributing
 
 Pull requests welcome! Ideas for contributions:
 
 * Add more system usage information
-	* Show Wi-Fi signal quality without using the deprecated [Wireless tools](https://en.wikipedia.org/wiki/Wireless_tools_for_Linux) or `/proc/net/wireless` file.
 	* Show total Disk IO and Network usage.
 	* Show power/energy usage.
 * Add more examples
